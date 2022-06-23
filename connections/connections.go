@@ -16,8 +16,17 @@ type Connections interface {
 }
 
 type BloodLabConn struct {
-	r *bufio.Reader
+	r     *bufio.Reader
+	alive bool
 	net.Conn
+}
+
+func (b BloodLabConn) SetAlive(alive bool) {
+	b.alive = alive
+}
+
+func (b BloodLabConn) IsAlive() bool {
+	return b.alive
 }
 
 func (b BloodLabConn) Peek(n int) ([]byte, error) {

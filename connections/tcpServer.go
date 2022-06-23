@@ -66,7 +66,17 @@ func (s *tcpServer) Run(handler Handlers) {
 			continue
 		}
 
-		go handler.HandleServerSession(s.BloodLabConn)
+		switch s.dataTransferType {
+		case RawProtocol:
+			go handler.HandleServerSession(s.BloodLabConn)
+		case LIS2A2Protocol:
+		// filter some data
+		case ASTMWrappedSTXProtocol:
+		// remove STX & ETX
+
+		default:
+			s.BloodLabConn.Close()
+		}
 
 	}
 }
