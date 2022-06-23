@@ -1,4 +1,4 @@
-module go-bloodlab-net
+module github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net
 
 go 1.18
 
