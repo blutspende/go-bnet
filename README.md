@@ -1,32 +1,32 @@
 # Go BloodLab Net
 
-# Introduction
+A libarary to communicate over various networking-protocols through one API. go-bloodlab-net works for systems that require blocked transfer and hides the implementation details, but is not suited for protocols that require control over the connection
 
 
 
-//
-//func (session *SessionHandlerTCP) handleDataReived(source string, filedata []byte, receivetimestamp time.Time) err {
-//	message := unmarshal(filedata....)
-//	repo = repostiory.persist_val(message)
-//	trigger_transmissioN_to_cia(repo)
-//	return nil
-//}
-//
-//// for servermode: this method is called on connect.ö the conneciton remains active for as long as the funciton does not exit
-//func (session *SessionHandlerTCP) serverSession(OurConnection netHandle, source string) {
-//	if !isListed(con) {
-//		return
-//	}
-//	// alternative. non-blocking
-//	// logic: check for new data... send new data
-//	for netHandle.isAlive() {
-//		analysis_request := <-events_from_elswehere_in_our_application // blocking!
-//		netHandle.Send(anayls_request.data)
-//
-//		if schlechte_laune {
-//			con.stop() // close connection
-//		}
-//	}
-//	// return = disconnect this connection
-//}
-//
+# Quick start
+
+
+``` go
+type MySessionData struct {
+}
+
+func (session *MySessionData) handleDataReived(source string, filedata []byte, receivetimestamp time.Time) err {	
+  fmt.Println(string(filedata), " received from ", source)  
+	return nil
+}
+
+func (session *MySessionData) serverSession(session go_bloodlab_net.Session, source string) {
+}
+
+func main() {
+  h := go_bloodlab_net.CreateTCPServer(4001, sth)
+  v := go_bloodlab_net.CreateFTPServer(...)
+    
+  go h.Run(MySessionData)
+  go v.Run(MySessionData)
+  
+  
+}
+
+```
