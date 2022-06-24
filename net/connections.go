@@ -1,8 +1,8 @@
 package net
 
 import (
-	"bufio"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -11,32 +11,37 @@ const (
 )
 
 type tcpSession struct {
-	r     *bufio.Reader
-	alive bool
+	isRunning bool
 	net.Conn
+	sessionActive *sync.WaitGroup
 }
 
 func (b tcpSession) SetAlive(alive bool) {
-	b.alive = alive
+	b.isRunning = alive
 }
 
 func (b tcpSession) IsAlive() bool {
-	return b.alive
+	return b.isRunning
 }
-func (b tcpSession) WaitTermination() {
 
+func (b tcpSession) WaitTermination() {
+	b.sessionActive.Wait()
 }
 
 func (b tcpSession) Send(msg []byte) (int, error) {
 	return b.Write(msg)
 }
 
-func (b tcpSession) Peek(n int) ([]byte, error) {
-	return b.r.Peek(n)
+func (b tcpSession) Read(p []byte) (int, error) {
+	return b.Conn.Read(p)
 }
 
-func (b tcpSession) Read(p []byte) (int, error) {
-	return b.r.Read(p)
+func (b tcpSession) Close() {
+	b.Conn.Close()
+}
+
+func (b tcpSession) RemoteAddress() string {
+	return b.Conn.RemoteAddr().(*net.TCPAddr).IP.To4().String()
 }
 
 type TimingConfiguration struct {

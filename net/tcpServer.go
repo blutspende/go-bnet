@@ -3,12 +3,15 @@ package net
 import (
 	"errors"
 	"fmt"
-	go_bloodlab_net "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net"
+	"github.com/pires/go-proxyproto"
+	"io"
+	"log"
 	"math/rand"
 	"net"
+	"sync"
 	"time"
 
-	"github.com/pires/go-proxyproto"
+	intNet "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net"
 )
 
 type tcpServerInstance struct {
@@ -17,20 +20,21 @@ type tcpServerInstance struct {
 	proxy            ProxyType
 	maxConnections   int
 	timingConfig     TimingConfiguration
-	go_bloodlab_net.Session
+	isRunning        bool
+	connectionCount  int
 }
 
-func CreateNewTCPServerInstance(listeningPort int, dataTransferType DataReviveType, proxy ProxyType, maxConnections int, defaultTiming ...TimingConfiguration) go_bloodlab_net.ConnectionInstance {
+func CreateNewTCPServerInstance(listeningPort int, dataTransferType DataReviveType, proxy ProxyType, maxConnections int, defaultTiming ...TimingConfiguration) intNet.ConnectionInstance {
 	tcpServerInit := &tcpServerInstance{
 		listeningPort:    listeningPort,
 		dataTransferType: dataTransferType,
 		maxConnections:   maxConnections,
 		proxy:            proxy,
 		timingConfig: TimingConfiguration{
-			Timeout:            time.Second * 3,
-			Deadline:           time.Millisecond * 200,
-			HealthCheckSpammer: time.Second * 5,
+			Timeout:  time.Second * 3,
+			Deadline: time.Millisecond * 200,
 		},
+		connectionCount: 0,
 	}
 
 	for i := range defaultTiming {
@@ -42,15 +46,14 @@ func CreateNewTCPServerInstance(listeningPort int, dataTransferType DataReviveTy
 }
 
 func (s *tcpServerInstance) Stop() {
-	// TODO: Implement this function
-	panic("Not implemented ATM")
+	s.isRunning = false
 }
 
 func (s *tcpServerInstance) Receive() ([]byte, error) {
 	return nil, errors.New("TCP server can't receive messages. Hint: Use another method")
 }
 
-func (s *tcpServerInstance) Run(handler go_bloodlab_net.Handler) {
+func (s *tcpServerInstance) Run(handler intNet.Handler) {
 	listener, err := net.Listen(TCPProtocol, fmt.Sprintf(":%d", s.listeningPort))
 	if err != nil {
 		panic(fmt.Sprintf("Can not start TCP-Server: %s", err))
@@ -58,58 +61,111 @@ func (s *tcpServerInstance) Run(handler go_bloodlab_net.Handler) {
 
 	rand.Seed(time.Now().Unix())
 
+	if s.proxy == NoProxy {
+		// TODO: implement if no proxy take net.listen
+	}
+
 	proxyListener := &proxyproto.Listener{Listener: listener}
 	defer proxyListener.Close()
-	for {
-		//conn, err := proxyListener.Accept()
-		//if err != nil {
-		//	continue
-		//}
 
-		// s.Session =
-		//
-		//if s.isHealthCheckOrScammerCall() {
-		//	s.Session.Close()
-		//	continue
-		//}
+	s.isRunning = true
 
-		switch s.dataTransferType {
-		case RawProtocol:
-			go handler.ClientConnected(s.Session)
-		case LIS2A2Protocol:
-		// filter some data
-		case ASTMWrappedSTXProtocol:
-		// remove STX & ETX
-
-		default:
-			s.Session.Close()
+	for s.isRunning {
+		conn, err := proxyListener.Accept()
+		if err != nil {
+			continue
 		}
 
+		if s.connectionCount >= s.maxConnections {
+			conn.Close()
+			println("max connection reached. Disconnected by TCP-Server")
+			log.Println("max connection reached. Disconnected by TCP-Server")
+			continue
+		}
+
+		go func() {
+			s.connectionCount++
+			s.readingReceivingMsg(conn, handler)
+			s.connectionCount--
+		}()
+
 	}
+}
+
+func (s *tcpServerInstance) readingReceivingMsg(conn net.Conn, handler intNet.Handler) ([]byte, error) {
+	isSessionActive := true
+
+	session := tcpSession{
+		isRunning:     true,
+		Conn:          conn,
+		sessionActive: &sync.WaitGroup{},
+	}
+
+	session.sessionActive.Add(1)
+
+	go func(session intNet.Session, handler intNet.Handler) {
+		remoteIPAndPort := session.RemoteAddress()
+		handler.ClientConnected(remoteIPAndPort, session) // blocking
+		isSessionActive = false
+	}(session, handler)
+
+	buff := make([]byte, 1500)
+	receivedMsg := make([]byte, 0)
+	remoteIPAndPort := conn.RemoteAddr().(*net.TCPAddr).IP.To4().String()
+
+	defer conn.Close()
+	defer session.sessionActive.Done()
+
+ReadLoop:
+	for {
+		if !isSessionActive || !s.isRunning {
+			break
+		}
+
+		err := conn.SetDeadline(time.Now().Add(time.Millisecond * 200))
+		if err != nil {
+			return nil, err
+		}
+
+		n, err := conn.Read(buff)
+		if err != nil {
+			if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
+				continue ReadLoop
+			} else if err == io.EOF {
+				handler.DataReceived(remoteIPAndPort, receivedMsg, time.Now())
+			}
+			return nil, err
+		}
+
+		if n == 0 {
+			handler.DataReceived(remoteIPAndPort, receivedMsg, time.Now())
+			return receivedMsg, err
+		}
+
+		for _, x := range buff[:n] {
+			switch s.dataTransferType {
+
+			case RawProtocol:
+				receivedMsg = append(receivedMsg, x)
+				// raw transmission ends only if the client disconnect
+			case ASTMWrappedSTXProtocol:
+				if x == STX {
+					continue
+				}
+				if x == ETX {
+					handler.DataReceived(remoteIPAndPort, receivedMsg, time.Now())
+					return receivedMsg, err
+				}
+				receivedMsg = append(receivedMsg, x)
+			default:
+				return nil, errors.New(fmt.Sprintf("This type is not implemented yet: %s", s.dataTransferType))
+			}
+		}
+	}
+
+	return receivedMsg, nil
 }
 
 func (s *tcpServerInstance) Send(data []byte) (int, error) {
 	return 0, errors.New("Server can't send a message! ")
 }
-
-//
-//func (s *tcpServerInstance) isHealthCheckOrScammerCall() bool {
-//	err := s.Session.SetDeadline(time.Now().Add(s.timingConfig.HealthCheckSpammer))
-//	if err != nil {
-//		s.Session.Close()
-//		return true
-//	}
-//
-//	peakBuff, err := s.Session.Peek(1)
-//	if err != nil {
-//		s.Session.Close()
-//		return true
-//	}
-//
-//	if len(peakBuff) == 0 {
-//		s.BloodLabConn.Close()
-//		return true
-//	}
-//
-//	return false
-//}

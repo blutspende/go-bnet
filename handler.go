@@ -4,5 +4,5 @@ import "time"
 
 type Handler interface {
 	DataReceived(source string, fileData []byte, receiveTimestamp time.Time)
-	ClientConnected(conn Session)
+	ClientConnected(source string, conn Session)
 }
