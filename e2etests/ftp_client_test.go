@@ -1,12 +1,13 @@
 package e2etests
 
 import (
-	intNet "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/net"
-	"github.com/stretchr/testify/assert"
 	"log"
 	"net"
 	"os"
 	"testing"
+
+	intNet "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/net"
+	"github.com/stretchr/testify/assert"
 )
 
 func startFTPMockServer() {
@@ -56,8 +57,8 @@ func startFTPMockServer() {
 }
 
 func Test_Simple_FTP_Client(t *testing.T) {
-// 	go startFTPMockServer()
-	tcpClient := intNet.CreateNewTCPClient("127.0.0.1", 4001, intNet.RawProtocol, intNet.NoProxy)
+	// 	go startFTPMockServer()
+	tcpClient := intNet.CreateNewTCPClient("127.0.0.1", 4001, intNet.PROTOCOL_RAW, intNet.NoProxy)
 
 	tcpClient.Send([]byte("Hallo hier ist client!"))
 	assert.Equal(t, "Hallo hier ist client!", string(<-receiveQ))

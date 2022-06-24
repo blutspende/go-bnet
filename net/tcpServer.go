@@ -3,13 +3,14 @@ package net
 import (
 	"errors"
 	"fmt"
-	"github.com/pires/go-proxyproto"
 	"io"
 	"log"
 	"math/rand"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/pires/go-proxyproto"
 
 	intNet "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net"
 )
@@ -22,6 +23,7 @@ type tcpServerInstance struct {
 	timingConfig     TimingConfiguration
 	isRunning        bool
 	connectionCount  int
+	listener         net.Listener
 }
 
 func CreateNewTCPServerInstance(listeningPort int, dataTransferType DataReviveType, proxy ProxyType, maxConnections int, defaultTiming ...TimingConfiguration) intNet.ConnectionInstance {
@@ -47,6 +49,7 @@ func CreateNewTCPServerInstance(listeningPort int, dataTransferType DataReviveTy
 
 func (s *tcpServerInstance) Stop() {
 	s.isRunning = false
+	s.listener.Close()
 }
 
 func (s *tcpServerInstance) Receive() ([]byte, error) {
@@ -54,7 +57,8 @@ func (s *tcpServerInstance) Receive() ([]byte, error) {
 }
 
 func (s *tcpServerInstance) Run(handler intNet.Handler) {
-	listener, err := net.Listen(TCPProtocol, fmt.Sprintf(":%d", s.listeningPort))
+	var err error
+	s.listener, err = net.Listen(TCPProtocol, fmt.Sprintf(":%d", s.listeningPort))
 	if err != nil {
 		panic(fmt.Sprintf("Can not start TCP-Server: %s", err))
 	}
@@ -65,34 +69,57 @@ func (s *tcpServerInstance) Run(handler intNet.Handler) {
 		// TODO: implement if no proxy take net.listen
 	}
 
-	proxyListener := &proxyproto.Listener{Listener: listener}
+	proxyListener := &proxyproto.Listener{Listener: s.listener}
 	defer proxyListener.Close()
 
 	s.isRunning = true
 
+	connections := make([]net.Conn, 0)
+
 	for s.isRunning {
-		conn, err := proxyListener.Accept()
+		connection, err := proxyListener.Accept()
 		if err != nil {
 			continue
 		}
 
 		if s.connectionCount >= s.maxConnections {
-			conn.Close()
+			connection.Close()
 			println("max connection reached. Disconnected by TCP-Server")
 			log.Println("max connection reached. Disconnected by TCP-Server")
 			continue
 		}
 
 		go func() {
+			connections = append(connections, connection)
 			s.connectionCount++
-			s.readingReceivingMsg(conn, handler)
+			s.handleTCPConnection(connection, handler)
 			s.connectionCount--
+			connections = remove(connections, connection)
 		}()
 
 	}
+
+	for _, x := range connections {
+		x.Close()
+	}
+
+	s.listener.Close()
 }
 
-func (s *tcpServerInstance) readingReceivingMsg(conn net.Conn, handler intNet.Handler) ([]byte, error) {
+func remove(connections []net.Conn, which net.Conn) []net.Conn {
+
+	ret := make([]net.Conn, 0)
+
+	for _, x := range connections {
+		if x != which {
+			ret = append(ret, x)
+		}
+	}
+
+	return ret
+}
+
+func (s *tcpServerInstance) handleTCPConnection(conn net.Conn, handler intNet.Handler) ([]byte, error) {
 	isSessionActive := true
 
 	session := tcpSession{
@@ -116,7 +143,6 @@ func (s *tcpServerInstance) readingReceivingMsg(conn net.Conn, handler intNet.Ha
 	defer conn.Close()
 	defer session.sessionActive.Done()
 
-ReadLoop:
 	for {
 		if !isSessionActive || !s.isRunning {
 			break
@@ -128,9 +154,10 @@ ReadLoop:
 		}
 
 		n, err := conn.Read(buff)
+
 		if err != nil {
 			if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
-				continue ReadLoop
+				continue
 			} else if err == io.EOF {
 				handler.DataReceived(remoteIPAndPort, receivedMsg, time.Now())
 			}
@@ -145,10 +172,10 @@ ReadLoop:
 		for _, x := range buff[:n] {
 			switch s.dataTransferType {
 
-			case RawProtocol:
+			case PROTOCOL_RAW:
 				receivedMsg = append(receivedMsg, x)
 				// raw transmission ends only if the client disconnect
-			case ASTMWrappedSTXProtocol:
+			case PROTOCOL_STXETX:
 				if x == STX {
 					continue
 				}

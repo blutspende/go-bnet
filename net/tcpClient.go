@@ -3,9 +3,10 @@ package net
 import (
 	"errors"
 	"fmt"
-	go_bloodlab_net "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net"
 	"net"
 	"time"
+
+	go_bloodlab_net "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net"
 )
 
 type tcpClient struct {
@@ -14,8 +15,8 @@ type tcpClient struct {
 	dataTransferType DataReviveType
 	proxy            ProxyType
 	timingConfig     TimingConfiguration
-	net.Conn
-	connected bool
+	conn             net.Conn
+	connected        bool
 }
 
 func CreateNewTCPClient(hostname string, port int, dataTransferType DataReviveType, proxy ProxyType, defaultTiming ...TimingConfiguration) go_bloodlab_net.ConnectionInstance {
@@ -40,7 +41,10 @@ func CreateNewTCPClient(hostname string, port int, dataTransferType DataReviveTy
 }
 
 func (s *tcpClient) Stop() {
-	s.Close()
+	if s.conn != nil {
+		s.conn.Close()
+		s.conn = nil
+	}
 }
 
 func (s *tcpClient) Receive() ([]byte, error) {
@@ -50,14 +54,14 @@ func (s *tcpClient) Receive() ([]byte, error) {
 	}
 
 	switch s.dataTransferType {
-	case RawProtocol:
+	case PROTOCOL_RAW:
 		buff := make([]byte, 500)
-		n, err := s.Conn.Read(buff)
+		n, err := s.conn.Read(buff)
 		return buff[:n], err
-	case LIS2A2Protocol:
+	case PROTOCLOL_LIS1A1:
 		return nil, errors.New("not implemented")
-	case ASTMWrappedSTXProtocol:
-		return wrappedStxProtocol(s.Conn)
+	case PROTOCOL_STXETX:
+		return wrappedStxProtocol(s.conn)
 	default:
 		return nil, errors.New("invalid data transfer type")
 	}
@@ -73,7 +77,7 @@ func (s *tcpClient) Send(data []byte) (int, error) {
 		return 0, err
 	}
 
-	return s.Conn.Write(data)
+	return s.conn.Write(data)
 }
 
 func (s *tcpClient) reconnect() error {
@@ -89,7 +93,7 @@ func (s *tcpClient) connect() error {
 		return err
 	}
 
-	s.Conn = conn
+	s.conn = conn
 	s.connected = true
 	return nil
 }

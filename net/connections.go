@@ -50,12 +50,12 @@ type TimingConfiguration struct {
 	HealthCheckSpammer time.Duration
 }
 
-type DataReviveType string
+type DataReviveType int
 
 const (
-	RawProtocol            DataReviveType = "RAW"
-	ASTMWrappedSTXProtocol DataReviveType = "ASTM-WRAPPED-STX"
-	LIS2A2Protocol         DataReviveType = "LIS2A2"
+	PROTOCOL_RAW     DataReviveType = 1
+	PROTOCOL_STXETX  DataReviveType = 2
+	PROTOCLOL_LIS1A1 DataReviveType = 3
 )
 
 type ProxyType int

@@ -1,75 +1,118 @@
 package e2etests
 
 import (
+	"fmt"
+	"io"
+	"net"
+	"testing"
+	"time"
+
 	intNet "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/net"
 	"github.com/stretchr/testify/assert"
-	"log"
-	"net"
-	"os"
-	"testing"
 )
 
-func startTCPMockServer() {
-	ln, err := net.Listen(intNet.TCPProtocol, ":4001")
-	if err != nil {
-		os.Exit(1)
+var TCPMockServerSendQ chan []byte = make(chan []byte)
+var TCPMockServerReceiveQ chan []byte = make(chan []byte)
+
+/* Run a Server for one connection,
+reading from socket, writing to channel
+reading from channel, writing to socket
+Server stops when client disconnects
+*/
+var listener net.Listener
+
+func runTCPMockServer() {
+	if listener != nil { // In case previous session got stuck remove it
+		listener.Close()
 	}
 
-	var connections []net.Conn
-	defer func() {
-		for _, conn := range connections {
-			conn.Close()
+	go func() {
+
+		listener, err := net.Listen(intNet.TCPProtocol, ":4001")
+		if err != nil {
+			panic(err)
 		}
-	}()
+		defer listener.Close()
 
-	defer ln.Close()
-	for {
-		conn, e := ln.Accept()
+		conn, e := listener.Accept()
 		if e != nil {
-			if ne, ok := e.(net.Error); ok && ne.Temporary() {
-				log.Printf("accept temp err: %v", ne)
-				continue
-			}
-
-			log.Printf("accept err: %v", e)
-			return
+			panic(err)
 		}
 
 		go func(conn net.Conn) {
 			buf := make([]byte, 100)
-			_, err := conn.Read(buf)
-			if err != nil {
-				panic("Read error")
-			}
-			receiveQ <- buf
+			for {
+				conn.SetDeadline(time.Now().Add(time.Millisecond * 200))
+				_, err := conn.Read(buf)
+				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() { // timeout dont care
+				} else if err == io.EOF {
+					return
+				} else {
+					if err != nil {
+						panic(err)
+					} else {
+						fmt.Println("Inqueue")
+						TCPMockServerReceiveQ <- buf
+					}
+				}
 
-			_, err = conn.Write([]byte("Hallo hier ist Server!"))
-			if err != nil {
-				panic("Write error")
+				select {
+				case x, ok := <-TCPMockServerSendQ:
+					if ok {
+						conn.SetDeadline(time.Now().Add(time.Millisecond * 200))
+						fmt.Println("Will send now")
+						if _, err = conn.Write(x); err != nil {
+							panic(err)
+						}
+					}
+				default:
+				}
 			}
 		}(conn)
-		connections = append(connections, conn)
-		if len(connections)%100 == 0 {
-			log.Printf("total number of connections: %v", len(connections))
-		}
-	}
+	}()
 }
 
-func Test_Simple_TCP_Client(t *testing.T) {
-	go startTCPMockServer()
-	tcpClient := intNet.CreateNewTCPClient("127.0.0.1", 4001, intNet.RawProtocol, intNet.NoProxy)
+/*
+	Connect to TCP-Server, Read Data and transmit data
+*/
+func TestClientConnectAndSend(t *testing.T) {
+	runTCPMockServer()
+	tcpClient := intNet.CreateNewTCPClient("127.0.0.1", 4001, intNet.PROTOCOL_RAW, intNet.NoProxy)
 
-	n, err := tcpClient.Send([]byte("Hallo hier ist client!"))
-	sendMsg := <-receiveQ
-	assert.Equal(t, "Hallo hier ist client!", string(sendMsg[:n]))
+	const TESTSTRINGSEND = "Testdata"
+	n, err := tcpClient.Send([]byte(TESTSTRINGSEND))
+	if err != nil {
+		panic(err)
+	}
+	sendMsg := <-TCPMockServerReceiveQ
+	assert.Equal(t, TESTSTRINGSEND, string(sendMsg[:n]))
+
+	// Testing Reading
+	const TESTSTRINGRECEIVE = "This data is definateley beeing transmitted"
+	TCPMockServerSendQ <- []byte(TESTSTRINGRECEIVE)
 	receivedMsg, err := tcpClient.Receive()
 	assert.Nil(t, err)
-	assert.Equal(t, "Hallo hier ist Server!", string(receivedMsg))
-	tcpClient.Stop()
+	assert.Equal(t, TESTSTRINGRECEIVE, string(receivedMsg))
 
+	// Disconnect & stop
+	tcpClient.Stop()
 }
 
-func startTCPMockWrappedSTXProtocolServer() {
+func TestClientProtocolSTXETX(t *testing.T) {
+	runTCPMockServer()
+	tcpClient := intNet.CreateNewTCPClient("127.0.0.1", 4001, intNet.PROTOCOL_STXETX, intNet.NoProxy)
+
+	TESTSTRING := "H|\\^&|||bloodlab-net|e2etest||||||||20220614163728\nL|1|N"
+	TCPMockServerSendQ <- []byte([]byte("\u0002" + TESTSTRING + "\u0003"))
+	receivedMsg, err := tcpClient.Receive()
+	assert.Nil(t, err)
+	assert.Equal(t, TESTSTRING, string(receivedMsg))
+
+	tcpClient.Stop()
+}
+
+/*
+func TestClientConnectAndSend(dataThatIsExpectedToBeSubmitted []byte) {
 	ln, err := net.Listen(intNet.TCPProtocol, ":4001")
 	if err != nil {
 		os.Exit(1)
@@ -96,9 +139,9 @@ func startTCPMockWrappedSTXProtocolServer() {
 		}
 
 		go func(conn net.Conn) {
-			_, err = conn.Write([]byte("\u0002H|\\^&|||Bio-Rad|IH v5.2||||||||20220614163728\nP|1||1010448658||NEUWIRTH^Werner||19410807|M||||||||||||||||||||||||^\nO|1|1122206473|1122206473^^^\\1122206473^^^|^^^CH03^^28319^|R|20220309153033|20220309153033|||||||||||11||||20220310155151|||F\nR|1|^^^AntiIgG^CH03^Direct Antiglobulin Test: (IgG) (5054)^|0^^|C||||R||lalina^|20220310130712|20220310155151|11|IH-1000|0300768|lalina\nC|1|ID-Diluent 2^^05761.03.01^20231231\\^^^|CAS^5054027022302331866^50540.27.02^20230228^4||\nR|2|^^^Result^CH03^Direct Antiglobulin Test: (IgG) (5054)^|0^POS^NEG^Ccee^K-^NEG^^^|C||||R||lalina^lalina|20220310130712|20220310155151|11|IH-1000|0300768|lalina\nC|1|^^^||C|1|^^^||\nL|1|N\u0003"))
+			_, err = conn.Write(dataThatIsExpectedToBeSubmitted)
 			if err != nil {
-				panic("Write error")
+				panic(err)
 			}
 		}(conn)
 		connections = append(connections, conn)
@@ -108,12 +151,16 @@ func startTCPMockWrappedSTXProtocolServer() {
 	}
 }
 
-func Test_Simple_TCP_Client_With_Wrapped_STX_Protocol(t *testing.T) {
-	go startTCPMockWrappedSTXProtocolServer()
-	tcpClient := intNet.CreateNewTCPClient("127.0.0.1", 4001, intNet.ASTMWrappedSTXProtocol, intNet.NoProxy)
 
-	receivedMsg, err := tcpClient.Receive()
+
+func Test_Simple_TCP_Client_SendData(t *testing.T) {
+	TESTSTRING := "H|\\^&|||bloodlab-net|e2etest||||||||20220614163728\nL|1|N"
+	go startTCPMockWrappedSTXProtocolServer([]byte(""))
+
+	tcpClient := intNet.CreateNewTCPClient("127.0.0.1", 4001, intNet.PROTOCOL_RAW, intNet.NoProxy)
+	_, err := tcpClient.Send([]byte(TESTSTRING))
 	assert.Nil(t, err)
-	assert.Equal(t, "H|\\^&|||Bio-Rad|IH v5.2||||||||20220614163728\nP|1||1010448658||NEUWIRTH^Werner||19410807|M||||||||||||||||||||||||^\nO|1|1122206473|1122206473^^^\\1122206473^^^|^^^CH03^^28319^|R|20220309153033|20220309153033|||||||||||11||||20220310155151|||F\nR|1|^^^AntiIgG^CH03^Direct Antiglobulin Test: (IgG) (5054)^|0^^|C||||R||lalina^|20220310130712|20220310155151|11|IH-1000|0300768|lalina\nC|1|ID-Diluent 2^^05761.03.01^20231231\\^^^|CAS^5054027022302331866^50540.27.02^20230228^4||\nR|2|^^^Result^CH03^Direct Antiglobulin Test: (IgG) (5054)^|0^POS^NEG^Ccee^K-^NEG^^^|C||||R||lalina^lalina|20220310130712|20220310155151|11|IH-1000|0300768|lalina\nC|1|^^^||C|1|^^^||\nL|1|N", string(receivedMsg))
+	assert.Equal(t, TESTSTRING, <-TCPMockServerReceiveQ)
 	tcpClient.Stop()
 }
+*/
