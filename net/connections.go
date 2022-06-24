@@ -74,3 +74,37 @@ const (
 	Delete  ReadFilePolicy = 2
 	Rename  ReadFilePolicy = 3
 )
+
+const (
+	STX = 0x02
+	ETX = 0x03
+)
+
+func wrappedStxProtocol(conn net.Conn) ([]byte, error) {
+	buff := make([]byte, 100)
+	receivedMsg := make([]byte, 0)
+ReadLoop:
+	for {
+
+		n, err := conn.Read(buff)
+		if err != nil {
+			if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
+				continue ReadLoop
+			}
+			return nil, err
+		}
+		if n == 0 {
+			return receivedMsg, err
+		}
+
+		for _, x := range buff[:n] {
+			if x == STX {
+				continue
+			}
+			if x == ETX {
+				return receivedMsg, err
+			}
+			receivedMsg = append(receivedMsg, x)
+		}
+	}
+}

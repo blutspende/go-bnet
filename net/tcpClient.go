@@ -44,15 +44,20 @@ func (s *tcpClient) Stop() {
 }
 
 func (s *tcpClient) Receive() ([]byte, error) {
+	err := s.reconnect()
+	if err != nil {
+		return nil, err
+	}
+
 	switch s.dataTransferType {
 	case RawProtocol:
-		buff := make([]byte, 1500)
+		buff := make([]byte, 500)
 		n, err := s.Conn.Read(buff)
 		return buff[:n], err
 	case LIS2A2Protocol:
 		return nil, errors.New("not implemented")
 	case ASTMWrappedSTXProtocol:
-		return nil, errors.New("not implemented")
+		return wrappedStxProtocol(s.Conn)
 	default:
 		return nil, errors.New("invalid data transfer type")
 	}
@@ -85,5 +90,6 @@ func (s *tcpClient) connect() error {
 	}
 
 	s.Conn = conn
+	s.connected = true
 	return nil
 }
