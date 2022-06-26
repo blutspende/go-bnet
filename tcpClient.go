@@ -117,15 +117,13 @@ func (s *tcpClientConnectionAndSession) IsAlive() bool {
 }
 
 func (s *tcpClientConnectionAndSession) WaitTermination() error {
-	return errors.New("Client connections can not be passively observed for disconnect.")
+	return errors.New("client connections can not be passively observed for disconnect")
 }
 
 func (s *tcpClientConnectionAndSession) Connect() error {
 	if err := s.ensureConnected(); err != nil {
 		if s.handler != nil {
-			go s.handler.Error(s, ErrorConnect,
-				errors.New(fmt.Sprintf("failed to connect - %s", err)),
-			)
+			go s.handler.Error(s, ErrorConnect, fmt.Errorf("failed to connect - %w", err))
 		}
 		return err
 	}

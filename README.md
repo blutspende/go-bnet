@@ -63,3 +63,34 @@ func main() {
   v.Send([]byte{ENQ}) // sync. sending is still possible 
   ...
 ```
+
+### TCP Server
+
+``` go
+type myHandler struct{}
+
+func (s *myHandler) Connected(session Session) {
+}
+
+func (s *myHandler) Disconnected(session Session) {
+}
+
+func (s *myHandler) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
+}
+
+func (s *myHandler) Error(session Session, errorType ErrorType, err error) {
+}
+
+func main() {
+
+tcpServer := CreateNewTCPServerInstance(4002,
+		PROTOCOL_RAW,
+		PROTOCOL_RAW,
+		NoLoadbalancer,
+		2,
+		DefaultTCPServerTimings)
+
+	var handlerTcp testTCPServerMaxConnections
+	go tcpServer.Run(&handlerTcp)
+
+}

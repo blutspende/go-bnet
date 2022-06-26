@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"log"
 	"os"
 	"testing"
@@ -12,38 +11,48 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var signalReady chan bool = make(chan bool)
-
-type testSimpleTCPServerReceive struct {
+type testRawDataProtocolSession struct {
+	receiveQ                    chan []byte
+	lastConnected               string
+	signalReady                 chan bool
+	didReceiveDisconnectMessage bool
 }
 
-var receiveQ = make(chan []byte, 500)
-var lastConnected = ""
-
-func (s *testSimpleTCPServerReceive) Connected(session Session) {
-	lastConnected, _ = session.RemoteAddress()
-	signalReady <- true
-	session.WaitTermination()
+func (s *testRawDataProtocolSession) Connected(session Session) {
+	s.lastConnected, _ = session.RemoteAddress()
+	s.signalReady <- true
 }
 
-func (s *testSimpleTCPServerReceive) Disconnected(session Session) {
-	log.Panic("Not implemented")
+func (s *testRawDataProtocolSession) Disconnected(session Session) {
+	s.didReceiveDisconnectMessage = true
 }
 
-func (s *testSimpleTCPServerReceive) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
-	lastConnected, _ = session.RemoteAddress()
-	receiveQ <- fileData
+func (s *testRawDataProtocolSession) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
+	s.lastConnected, _ = session.RemoteAddress()
+	s.receiveQ <- fileData
+	session.Send([]byte("An adequate response"))
 }
 
-func (s *testSimpleTCPServerReceive) Error(session Session, errorType ErrorType, err error) {
-
+func (s *testRawDataProtocolSession) Error(session Session, errorType ErrorType, err error) {
+	log.Fatal(err)
 }
 
-func Test_Simple_TCP_Server_Receive(t *testing.T) {
-	tcpServer := CreateNewTCPServerInstance(4001, PROTOCOL_RAW, NoLoadbalancer, 100)
-	var handlerTcp testSimpleTCPServerReceive
-	go tcpServer.Run(&handlerTcp)
+func TestRawDataProtocol(t *testing.T) {
+	tcpServer := CreateNewTCPServerInstance(4001, PROTOCOL_RAW, PROTOCOL_RAW, NoLoadbalancer, 100, DefaultTCPServerTimings)
 
+	var handler testRawDataProtocolSession
+	handler.receiveQ = make(chan []byte, 500)
+	handler.signalReady = make(chan bool)
+
+	isServerHalted := false
+
+	// run the mainloop, observe that it closes later
+	go func() {
+		tcpServer.Run(&handler)
+		isServerHalted = true
+	}()
+
+	// connect and expect connection handler to signal
 	clientConn, err := net.Dial("tcp", "127.0.0.1:4001")
 	if err != nil {
 		t.Fail()
@@ -51,9 +60,9 @@ func Test_Simple_TCP_Server_Receive(t *testing.T) {
 	}
 
 	select {
-	case isReady := <-signalReady:
+	case isReady := <-handler.signalReady:
 		if isReady {
-			assert.Equal(t, "127.0.0.1", lastConnected)
+			assert.Equal(t, "127.0.0.1", handler.lastConnected)
 		}
 	case <-time.After(2 * time.Second):
 		{
@@ -61,99 +70,86 @@ func Test_Simple_TCP_Server_Receive(t *testing.T) {
 		}
 	}
 
+	// send data to server, expect it to receive
 	const TESTSTRING = "Hello its me"
 	_, err = clientConn.Write([]byte(TESTSTRING))
 	assert.Nil(t, err)
-	clientConn.Close()
 
 	select {
-	case receivedMsg := <-receiveQ:
-		if receivedMsg != nil {
-			assert.Equal(t, TESTSTRING, string(receivedMsg))
-		}
+	case receivedMsg := <-handler.receiveQ:
+		assert.NotNil(t, receivedMsg, "Received a valid response")
+		assert.Equal(t, TESTSTRING, string(receivedMsg))
 	case <-time.After(2 * time.Second):
-		{
-			t.Fatalf("Can not receive messages from the client")
-		}
+		t.Fatalf("Can not receive messages from the client")
 	}
+
+	// expect "an adeqate response", that is the string the server sends back
+	var buffer []byte = make([]byte, 100)
+
+	_ = clientConn.SetDeadline(time.Now().Add(time.Second * 2))
+	n, err := clientConn.Read(buffer)
+	assert.Nil(t, err, "Reading from client")
+	assert.Equal(t, "An adequate response", string(buffer[:n]))
+
+	//	clientConn.Close()
 
 	tcpServer.Stop()
 
+	time.Sleep(time.Second * 1)
+
+	assert.True(t, handler.didReceiveDisconnectMessage, "Disconnect message was send")
+	assert.True(t, isServerHalted, "Server has been stopped")
 }
 
-type testSimpleTCPServerSend struct {
+//------------------------------------------------------
+// Test that the server declines too many connections
+//------------------------------------------------------
+type testTCPServerMaxConnections struct {
+	maxConnectionErrorDidOccur bool
 }
 
-func (s *testSimpleTCPServerSend) Connected(session Session) {
-	lastConnected, _ = session.RemoteAddress()
-	signalReady <- true
-	for session.IsAlive() {
-		data := <-receiveQ
-		_, err := session.Send(data)
-		if err != nil {
-			return
-		}
+func (s *testTCPServerMaxConnections) Connected(session Session) {
+}
+
+func (s *testTCPServerMaxConnections) Disconnected(session Session) {
+}
+
+func (s *testTCPServerMaxConnections) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
+}
+
+func (s *testTCPServerMaxConnections) Error(session Session, errorType ErrorType, err error) {
+	if errorType == ErrorMaxConnections {
+		s.maxConnectionErrorDidOccur = true
 	}
 }
 
-func (s *testSimpleTCPServerSend) Disconnected(session Session) {
-}
+func TestTCPServerMaxConnections(t *testing.T) {
 
-func (s *testSimpleTCPServerSend) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
-	lastConnected, _ = session.RemoteAddress()
-	receiveQ <- fileData
-}
+	tcpServer := CreateNewTCPServerInstance(4002,
+		PROTOCOL_RAW,
+		PROTOCOL_RAW,
+		NoLoadbalancer,
+		2,
+		DefaultTCPServerTimings)
 
-func (s *testSimpleTCPServerSend) Error(session Session, errtype ErrorType, err error) {
+	var handlerTcp testTCPServerMaxConnections
+	handlerTcp.maxConnectionErrorDidOccur = false
 
-}
-
-func Test_Simple_TCP_Server_Send(t *testing.T) {
-	tcpServer := CreateNewTCPServerInstance(4001, PROTOCOL_RAW, NoLoadbalancer, 100)
-
-	var handlerTcp testSimpleTCPServerSend
 	go tcpServer.Run(&handlerTcp)
 
-	conn, err := net.Dial("tcp", "127.0.0.1:4001")
-	if err != nil {
-		t.Fail()
-		os.Exit(1)
-	}
+	conn1, err1 := net.Dial("tcp", "127.0.0.1:4002")
+	assert.Nil(t, err1)
+	assert.NotNil(t, conn1)
 
-	receiveQ <- []byte("ACK")
+	conn2, err2 := net.Dial("tcp", "127.0.0.1:4002")
+	assert.Nil(t, err2)
+	assert.NotNil(t, conn2)
 
-	select {
-	case isReady := <-signalReady:
-		if isReady {
-			assert.Equal(t, "127.0.0.1", lastConnected)
-		}
-	case <-time.After(50 * time.Second):
-		{
-			t.Fatalf("Can not start tcp server")
-		}
-	}
+	conn3, err3 := net.Dial("tcp", "127.0.0.1:4002")
+	assert.Nil(t, err3)
+	assert.NotNil(t, conn3)
 
-	buff := make([]byte, 1500)
-	n, err := conn.Read(buff)
-	assert.Nil(t, err)
-	assert.Equal(t, "ACK", string(buff[:n]))
-	conn.Close()
-	tcpServer.Stop()
-}
+	time.Sleep(time.Second * 1) // sessions start async, therefor a short waitign is required
 
-func Test_Simple_TCP_Server_Max_Connections(t *testing.T) {
-	tcpServer := CreateNewTCPServerInstance(4001, PROTOCOL_RAW, NoLoadbalancer, 0)
-	var handlerTcp testSimpleTCPServerSend
-	go tcpServer.Run(&handlerTcp)
-
-	conn, err := net.Dial("tcp", "127.0.0.1:4001")
-	assert.Nil(t, err)
-	assert.NotNil(t, conn)
-
-	err = conn.SetReadDeadline(time.Now().Add(time.Second * 10))
-	assert.Nil(t, err)
-
-	buf := make([]byte, 2)
-	_, err = conn.Read(buf)
-	assert.Equal(t, io.EOF, err)
+	assert.True(t, handlerTcp.maxConnectionErrorDidOccur, "Expected error: MaxConnections did occur")
 }
