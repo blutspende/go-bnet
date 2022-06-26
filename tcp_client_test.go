@@ -10,23 +10,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var tcpMockServerSendQ chan []byte = make(chan []byte, 1)
-var tcpMockServerReceiveQ chan []byte = make(chan []byte, 1)
-
-/* Run a Server for one connection,
-reading from socket, writing to channel
-reading from channel, writing to socket
-Server stops when client disconnects
+/* Run a Server for one connection, reading from socket, writing to channel
+reading from channel, writing to socket Server stops when client disconnects
 */
-var listener net.Listener
 
-func runTCPMockServer() {
+func runTCPMockServer(port int, tcpMockServerSendQ chan []byte, tcpMockServerReceiveQ chan []byte) {
+	var listener net.Listener
+
 	if listener != nil { // In case previous session got stuck remove it
 		listener.Close()
 	}
 	go func() {
 
-		listener, err := net.Listen("tcp", ":4001")
+		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 		if err != nil {
 			panic(err)
 		}
@@ -54,7 +50,6 @@ func runTCPMockServer() {
 			select {
 			case x, ok := <-tcpMockServerSendQ:
 				if ok {
-					fmt.Println(x)
 					conn.SetDeadline(time.Now().Add(time.Millisecond * 200))
 					if _, err = conn.Write(x); err != nil {
 						panic(err)
@@ -69,9 +64,15 @@ func runTCPMockServer() {
 
 /*
 	Connect to TCP-Server, Read Data and transmit data
+
+	For parallel test-execution keep server-port unique throughout the suite
 */
 func TestClientConnectReceiveAndSend(t *testing.T) {
-	runTCPMockServer()
+
+	var tcpMockServerSendQ chan []byte = make(chan []byte, 1)
+	var tcpMockServerReceiveQ chan []byte = make(chan []byte, 1)
+	runTCPMockServer(4001, tcpMockServerSendQ, tcpMockServerReceiveQ)
+
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4001, PROTOCOL_RAW, PROTOCOL_RAW, NoLoadbalancer, DefaultTCPTiming)
 
 	err := tcpClient.Connect()
@@ -99,8 +100,11 @@ func TestClientConnectReceiveAndSend(t *testing.T) {
 Protocol wrapped STX Send and Receive
 ****************************************************************/
 func TestClientProtocolSTXETX(t *testing.T) {
-	runTCPMockServer()
-	tcpClient := CreateNewTCPClient("127.0.0.1", 4001,
+	var tcpMockServerSendQ chan []byte = make(chan []byte, 1)
+	var tcpMockServerReceiveQ chan []byte = make(chan []byte, 1)
+	runTCPMockServer(4002, tcpMockServerSendQ, tcpMockServerReceiveQ)
+
+	tcpClient := CreateNewTCPClient("127.0.0.1", 4002,
 		PROTOCOL_STXETX,
 		PROTOCOL_STXETX,
 		NoLoadbalancer, DefaultTCPTiming)
@@ -126,17 +130,19 @@ func TestClientProtocolSTXETX(t *testing.T) {
 Test client remote address
 ****************************************************************/
 func TestClientRemoteAddress(t *testing.T) {
-	runTCPMockServer()
-	tcpClient := CreateNewTCPClient("127.0.0.1", 4001, PROTOCOL_STXETX, PROTOCOL_STXETX, NoLoadbalancer, DefaultTCPTiming)
+	var tcpMockServerSendQ chan []byte = make(chan []byte, 1)
+	var tcpMockServerReceiveQ chan []byte = make(chan []byte, 1)
+	runTCPMockServer(4003, tcpMockServerSendQ, tcpMockServerReceiveQ)
+
+	tcpClient := CreateNewTCPClient("127.0.0.1", 4003, PROTOCOL_STXETX, PROTOCOL_STXETX, NoLoadbalancer, DefaultTCPTiming)
 
 	tcpClient.Connect()
 	addr, _ := tcpClient.RemoteAddress()
 	assert.Equal(t, "127.0.0.1", addr)
-
 }
 
 /****************************************************************
-Test client with Run-Session
+Test client with Run-Session to connect, handle async events
 ****************************************************************/
 type ClientTestSession struct {
 	receiveBuffer            string
@@ -160,8 +166,11 @@ func (s *ClientTestSession) Error(session Session, typeOfError ErrorType, err er
 }
 
 func TestClientRun(t *testing.T) {
-	runTCPMockServer()
-	tcpClient := CreateNewTCPClient("127.0.0.1", 4001, PROTOCOL_RAW, PROTOCOL_RAW, NoLoadbalancer, DefaultTCPTiming)
+	var tcpMockServerSendQ chan []byte = make(chan []byte, 1)
+	var tcpMockServerReceiveQ chan []byte = make(chan []byte, 1)
+	runTCPMockServer(4004, tcpMockServerSendQ, tcpMockServerReceiveQ)
+
+	tcpClient := CreateNewTCPClient("127.0.0.1", 4004, PROTOCOL_RAW, PROTOCOL_RAW, NoLoadbalancer, DefaultTCPTiming)
 
 	var session ClientTestSession
 	session.connectionEventOccured = false

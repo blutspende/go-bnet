@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"time"
 
@@ -57,7 +56,6 @@ func (s *tcpClientConnectionAndSession) Run(handler Handler) {
 		s.ensureConnected()
 		data, err := s.Receive()
 		if err != nil {
-			log.Println(err)
 			if err == io.EOF {
 				s.Close()
 				break
@@ -75,8 +73,8 @@ func (s *tcpClientConnectionAndSession) Run(handler Handler) {
 }
 
 func (s *tcpClientConnectionAndSession) Stop() {
-	s.Close()
 	s.isStopped = true
+	s.Close()
 }
 
 func (s *tcpClientConnectionAndSession) RemoteAddress() (string, error) {
@@ -138,8 +136,7 @@ func (s *tcpClientConnectionAndSession) Receive() ([]byte, error) {
 
 	if err := s.ensureConnected(); err != nil {
 		if s.handler != nil {
-			s.handler.Error(s, ErrorReceive,
-				errors.New(fmt.Sprintf("failed to reconnect - %s", err)))
+			s.handler.Error(s, ErrorReceive, fmt.Errorf("failed to reconnect %w", err))
 		}
 		return nil, err
 	}
@@ -180,6 +177,7 @@ func (s *tcpClientConnectionAndSession) Send(data []byte) (int, error) {
 
 func (s *tcpClientConnectionAndSession) ensureConnected() error {
 	if s.connected || s.isStopped {
+		fmt.Printf("Return due to connected:%t and stopped:%t conn is nil?:%t\n", s.connected, s.isStopped, s.conn == nil)
 		return nil
 	}
 
