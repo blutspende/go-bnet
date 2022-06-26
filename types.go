@@ -5,8 +5,15 @@ import (
 )
 
 type TimingConfiguration struct {
-	Timeout  time.Duration
-	Deadline time.Duration
+	Timeout             time.Duration
+	Deadline            time.Duration
+	FlushBufferTimoutMs int
+}
+
+var DefaultTCPServerTimings = TimingConfiguration{
+	Timeout:             time.Second * 3,
+	Deadline:            time.Millisecond * 200,
+	FlushBufferTimoutMs: 500,
 }
 
 type HighLevelProtocol int
@@ -39,17 +46,16 @@ const (
 	Rename  ReadFilePolicy = 3
 )
 
-var DefaultTCPTiming = TimingConfiguration{
-	Timeout:  time.Second * 3,
-	Deadline: time.Millisecond * 200,
-}
-
 type ErrorType int
 
 const (
-	ErrorConnect    ErrorType = 1
-	ErrorSend       ErrorType = 2
-	ErrorReceive    ErrorType = 3
-	ErrorDisconnect ErrorType = 4
-	ErrorInternal   ErrorType = 5
+	ErrorConnect         ErrorType = 1
+	ErrorSend            ErrorType = 2
+	ErrorReceive         ErrorType = 3
+	ErrorDisconnect      ErrorType = 4
+	ErrorInternal        ErrorType = 5
+	ErrorConnectionLimit ErrorType = 6
+	ErrorAccept          ErrorType = 7 // error for Server
+	ErrorMaxConnections  ErrorType = 8
+	ErrorCreateSession   ErrorType = 9 // server only
 )
