@@ -62,8 +62,9 @@ func (s *tcpClientConnectionAndSession) Run(handler Handler) {
 				s.Close()
 				break
 			} else {
-				//TODO: better handling
-				log.Println(err)
+				if s.handler != nil {
+					s.handler.Error(s, ErrorReceive, err)
+				}
 			}
 		} else {
 			handler.DataReceived(s, data, time.Now())
