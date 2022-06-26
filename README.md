@@ -3,7 +3,7 @@
 A libarary to communicate over various networking-protocols through one API. go-bloodlab-net works for systems that require blocked transfer and hides the implementation details, but is not suited for protocols that require control over the connection
 
 ###### Install
-`go get github.com/DRK-Blutspende-BaWueHe/go-astm`
+`go get github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net`
 
 ### TCP/IP Client  with synchroneous reception
 Use this when you implement a client do not need asynchronous receiving.
