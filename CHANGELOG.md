@@ -3,6 +3,7 @@
 ### Fixed
 
 - Lib is now a package to use and not a program
+- TCPServer Session returns RemoteAddr
 
 # [0.1.0]  - 2022-06-27
 
