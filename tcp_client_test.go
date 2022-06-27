@@ -1,4 +1,4 @@
-package main
+package bloodlabnet
 
 import (
 	"fmt"
@@ -73,7 +73,7 @@ func TestClientConnectReceiveAndSend(t *testing.T) {
 	var tcpMockServerReceiveQ chan []byte = make(chan []byte, 1)
 	runTCPMockServer(4001, tcpMockServerSendQ, tcpMockServerReceiveQ)
 
-	tcpClient := CreateNewTCPClient("127.0.0.1", 4001, PROTOCOL_RAW, PROTOCOL_RAW, NoLoadbalancer, DefaultTCPServerTimings)
+	tcpClient := CreateNewTCPClient("127.0.0.1", 4001, PROTOCOL_RAW, PROTOCOL_RAW, NoLoadBalancer, DefaultTCPServerTimings)
 
 	err := tcpClient.Connect()
 	assert.Nil(t, err)
@@ -107,7 +107,7 @@ func TestClientProtocolSTXETX(t *testing.T) {
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4002,
 		PROTOCOL_STXETX,
 		PROTOCOL_STXETX,
-		NoLoadbalancer, DefaultTCPServerTimings)
+		NoLoadBalancer, DefaultTCPServerTimings)
 
 	// Receiving from instrument expecting STX and ETX removed
 	TESTSTRING := "H|\\^&|||bloodlab-net|e2etest||||||||20220614163728\nL|1|N"
@@ -134,7 +134,7 @@ func TestClientRemoteAddress(t *testing.T) {
 	var tcpMockServerReceiveQ chan []byte = make(chan []byte, 1)
 	runTCPMockServer(4003, tcpMockServerSendQ, tcpMockServerReceiveQ)
 
-	tcpClient := CreateNewTCPClient("127.0.0.1", 4003, PROTOCOL_STXETX, PROTOCOL_STXETX, NoLoadbalancer, DefaultTCPServerTimings)
+	tcpClient := CreateNewTCPClient("127.0.0.1", 4003, PROTOCOL_STXETX, PROTOCOL_STXETX, NoLoadBalancer, DefaultTCPServerTimings)
 
 	tcpClient.Connect()
 	addr, _ := tcpClient.RemoteAddress()
@@ -170,7 +170,7 @@ func TestClientRun(t *testing.T) {
 	var tcpMockServerReceiveQ chan []byte = make(chan []byte, 1)
 	runTCPMockServer(4004, tcpMockServerSendQ, tcpMockServerReceiveQ)
 
-	tcpClient := CreateNewTCPClient("127.0.0.1", 4004, PROTOCOL_RAW, PROTOCOL_RAW, NoLoadbalancer, DefaultTCPServerTimings)
+	tcpClient := CreateNewTCPClient("127.0.0.1", 4004, PROTOCOL_RAW, PROTOCOL_RAW, NoLoadBalancer, DefaultTCPServerTimings)
 
 	var session ClientTestSession
 	session.connectionEventOccured = false

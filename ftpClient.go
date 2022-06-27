@@ -1,4 +1,4 @@
-package main
+package bloodlabnet
 
 import (
 	"errors"
