@@ -4,6 +4,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -151,4 +152,51 @@ func TestTCPServerMaxConnections(t *testing.T) {
 	time.Sleep(time.Second * 1) // sessions start async, therefor a short waitign is required
 
 	assert.True(t, handlerTcp.maxConnectionErrorDidOccur, "Expected error: MaxConnections did occur")
+}
+
+//------------------------------------------------------
+// Server identifies the remote-Address
+//------------------------------------------------------
+type testTCPServerRemoteAddress struct {
+	lastConnectionSource string
+	wasConnectedCalled   *sync.WaitGroup
+}
+
+func (s *testTCPServerRemoteAddress) Connected(session Session) {
+	s.lastConnectionSource, _ = session.RemoteAddress()
+	s.wasConnectedCalled.Done()
+}
+
+func (s *testTCPServerRemoteAddress) Disconnected(session Session) {
+}
+
+func (s *testTCPServerRemoteAddress) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
+}
+
+func (s *testTCPServerRemoteAddress) Error(session Session, errorType ErrorType, err error) {
+	log.Println(err)
+}
+
+func TestTCPServerIdentifyRemoteAddress(t *testing.T) {
+	tcpServer := CreateNewTCPServerInstance(4005,
+		PROTOCOL_RAW,
+		PROTOCOL_RAW,
+		NoLoadBalancer,
+		2,
+		DefaultTCPServerTimings)
+
+	var handlerTcp testTCPServerRemoteAddress
+
+	go tcpServer.Run(&handlerTcp)
+
+	handlerTcp.wasConnectedCalled = &sync.WaitGroup{}
+	handlerTcp.wasConnectedCalled.Add(1)
+
+	conn1, err1 := net.Dial("tcp", "127.0.0.1:4005")
+	assert.Nil(t, err1, "Connecting to server")
+	assert.NotNil(t, conn1)
+
+	handlerTcp.wasConnectedCalled.Wait() // ToDo: This potentially freezes the test, add timeout impl
+
+	assert.Equal(t, "127.0.0.1", handlerTcp.lastConnectionSource)
 }

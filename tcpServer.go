@@ -80,6 +80,7 @@ func (instance *tcpServerInstance) Run(handler Handler) {
 		connection, err := proxyListener.Accept()
 		if err != nil {
 			if instance.handler != nil && instance.isRunning {
+				log.Println(err)
 				go instance.handler.Error(nil, ErrorAccept, err)
 			}
 			continue
@@ -289,5 +290,10 @@ func (s *tcpServerSession) WaitTermination() error {
 }
 
 func (s *tcpServerSession) RemoteAddress() (string, error) {
-	return s.remoteAddr.IP.To4().String(), nil
+	if s.conn != nil {
+		host, _, err := net.SplitHostPort(s.conn.RemoteAddr().String())
+		return host, err
+	} else {
+		return "", nil
+	}
 }
