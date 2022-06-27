@@ -1,4 +1,4 @@
-package main
+package bloodlabnet
 
 import (
 	"errors"
@@ -44,9 +44,9 @@ func CreateNewTCPClient(hostname string, port int,
 	}
 }
 
-/* Ensure the client stays connected and receives Data.
-On disconnect from server the client will forever retry to connect.
-Call Stop() will exit the loop  */
+// Run - Ensure the client stays connected and receives Data.
+// On disconnect from server the client will forever retry to connect.
+// Call Stop() will exit the loop
 func (s *tcpClientConnectionAndSession) Run(handler Handler) {
 	s.handler = handler
 	s.isStopped = false
