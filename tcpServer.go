@@ -289,6 +289,7 @@ func (session *tcpServerSession) WaitTermination() error {
 }
 
 func (session *tcpServerSession) RemoteAddress() (string, error) {
+	fmt.Println("address", session.conn.RemoteAddr().String())
 	host, _, err := net.SplitHostPort(session.conn.RemoteAddr().String())
 	if err != nil {
 		return host, err
