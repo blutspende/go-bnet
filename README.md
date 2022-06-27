@@ -94,3 +94,15 @@ tcpServer := CreateNewTCPServerInstance(4002,
 	go tcpServer.Run(&handlerTcp)
 
 }
+```
+### SFTP Client
+Connect to a sftp server and keep polling. New files are presented through same API like TCP-Server and TCP-Client as if they were transmitted that way.
+
+```go
+  server:= CreateNewFTPClient("127.0.0.1", 22, "/somewhere", "*.*", "testuser", "testpass", "",
+	"YYMMDDHHMMSS.dat", // fileNamePattern for generating filenames
+	RenameWhenRead, // how to treat processed files
+		PROTOCOL_RAW, // protocol for receiving
+		PROTOCOL_RAW, // protoocl for sending
+  DefaultFTPClientTimings) ConnectionAndSessionInstance
+```

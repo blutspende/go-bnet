@@ -8,12 +8,19 @@ type TimingConfiguration struct {
 	Timeout             time.Duration
 	Deadline            time.Duration
 	FlushBufferTimoutMs int
+	PollInterval        time.Duration
 }
 
 var DefaultTCPServerTimings = TimingConfiguration{
 	Timeout:             time.Second * 3,
 	Deadline:            time.Millisecond * 200,
 	FlushBufferTimoutMs: 500,
+	PollInterval:        time.Second * 60,
+}
+
+var DefaultFTPClientTimings = TimingConfiguration{
+	Timeout:      time.Second * 5,
+	PollInterval: time.Second * 60,
 }
 
 type HighLevelProtocol int
@@ -41,9 +48,9 @@ const (
 type ReadFilePolicy int
 
 const (
-	Nothing ReadFilePolicy = 1
-	Delete  ReadFilePolicy = 2
-	Rename  ReadFilePolicy = 3
+	ReadAndLeaveFile ReadFilePolicy = 1
+	DeleteWhenRead   ReadFilePolicy = 2
+	RenameWhenRead   ReadFilePolicy = 3
 )
 
 type ErrorType int
