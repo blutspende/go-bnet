@@ -1,12 +1,11 @@
-package main
+package bloodlabnet
 
 import (
 	"log"
+	"net"
 	"os"
 	"testing"
 	"time"
-
-	"net"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -38,7 +37,7 @@ func (s *testRawDataProtocolSession) Error(session Session, errorType ErrorType,
 }
 
 func TestRawDataProtocol(t *testing.T) {
-	tcpServer := CreateNewTCPServerInstance(4001, PROTOCOL_RAW, PROTOCOL_RAW, NoLoadbalancer, 100, DefaultTCPServerTimings)
+	tcpServer := CreateNewTCPServerInstance(4001, PROTOCOL_RAW, PROTOCOL_RAW, NoLoadBalancer, 100, DefaultTCPServerTimings)
 
 	var handler testRawDataProtocolSession
 	handler.receiveQ = make(chan []byte, 500)
@@ -128,7 +127,7 @@ func TestTCPServerMaxConnections(t *testing.T) {
 	tcpServer := CreateNewTCPServerInstance(4002,
 		PROTOCOL_RAW,
 		PROTOCOL_RAW,
-		NoLoadbalancer,
+		NoLoadBalancer,
 		2,
 		DefaultTCPServerTimings)
 

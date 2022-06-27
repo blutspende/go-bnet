@@ -1,4 +1,4 @@
-package main
+package bloodlabnet
 
 import (
 	"errors"
@@ -43,17 +43,17 @@ func CreateNewTCPServerInstance(listeningPort int, protocolReceiveve HighLevelPr
 	}
 }
 
-func (s *tcpServerInstance) Stop() {
-	s.isRunning = false
-	s.listener.Close()
-	s.mainLoopActive.Wait()
+func (instance *tcpServerInstance) Stop() {
+	instance.isRunning = false
+	instance.listener.Close()
+	instance.mainLoopActive.Wait()
 }
 
-func (s *tcpServerInstance) Send(data []byte) (int, error) {
+func (instance *tcpServerInstance) Send(data []byte) (int, error) {
 	return 0, errors.New("server instance can not send data. What are you looking for, a broadcast to all clients that are connected ? ")
 }
 
-func (s *tcpServerInstance) Receive() ([]byte, error) {
+func (instance *tcpServerInstance) Receive() ([]byte, error) {
 	return nil, errors.New("TCP server can't receive messages. Hint: Use another method")
 }
 
@@ -177,7 +177,7 @@ func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 	defer session.Close()
 	defer session.sessionActive.Done()
 
-	millisceondsSinceLastRead := 0
+	milliSecondsSinceLastRead := 0
 
 	for {
 
@@ -188,7 +188,7 @@ func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 		// flush timeout for protocol RAW.
 		if instance.protocolReceive == PROTOCOL_RAW &&
 			instance.timingConfig.FlushBufferTimoutMs > 0 && // disabled timout ?
-			millisceondsSinceLastRead > instance.timingConfig.FlushBufferTimoutMs &&
+			milliSecondsSinceLastRead > instance.timingConfig.FlushBufferTimoutMs &&
 			len(receivedMsg) > 0 { // buffer full, time up = flush it
 			session.handler.DataReceived(session, receivedMsg, time.Now())
 			receivedMsg = []byte{}
@@ -201,7 +201,7 @@ func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 
 		if err != nil {
 			if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
-				millisceondsSinceLastRead = millisceondsSinceLastRead + 200
+				milliSecondsSinceLastRead = milliSecondsSinceLastRead + 200
 				continue // on timeout....
 			} else if err == io.EOF {
 				// end of input (client disconnected)
@@ -223,7 +223,7 @@ func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 			continue
 		}
 
-		millisceondsSinceLastRead = 0
+		milliSecondsSinceLastRead = 0
 
 		for _, x := range tcpReceiveBuffer[:n] {
 			switch instance.protocolReceive {
@@ -272,22 +272,22 @@ func (s *tcpServerSession) Receive() ([]byte, error) {
 	return []byte{}, errors.New("you can not receive messages directly, use the event-handler instead")
 }
 
-func (session *tcpServerSession) Close() error {
-	if session.IsAlive() && session.conn != nil {
-		if session.handler != nil {
-			session.handler.Disconnected(session)
+func (s *tcpServerSession) Close() error {
+	if s.IsAlive() && s.conn != nil {
+		if s.handler != nil {
+			s.handler.Disconnected(s)
 		}
-		session.conn.Close()
-		session.isRunning = false
+		s.conn.Close()
+		s.isRunning = false
 		return nil
 	}
 	return nil
 }
 
-func (session *tcpServerSession) WaitTermination() error {
+func (s *tcpServerSession) WaitTermination() error {
 	return errors.New("not implemented yet")
 }
 
-func (session *tcpServerSession) RemoteAddress() (string, error) {
-	return session.remoteAddr.IP.To4().String(), nil
+func (s *tcpServerSession) RemoteAddress() (string, error) {
+	return s.remoteAddr.IP.To4().String(), nil
 }
