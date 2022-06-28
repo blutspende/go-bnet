@@ -6,8 +6,6 @@ import (
 	"io"
 	"net"
 	"time"
-
-	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol"
 )
 
 /* One instance of client can only connect one
@@ -138,7 +136,7 @@ func (s *tcpClientConnectionAndSession) Receive() ([]byte, error) {
 		}
 		return nil, err
 	}
-
+	/* TODO: rewrite
 	switch s.protocolReceive {
 	case PROTOCOL_RAW:
 		buff := make([]byte, 500)
@@ -151,6 +149,9 @@ func (s *tcpClientConnectionAndSession) Receive() ([]byte, error) {
 	default:
 		return nil, errors.New("invalid data transfer type")
 	}
+	*/
+
+	return nil, errors.New("Not implemented")
 
 }
 
@@ -159,7 +160,7 @@ func (s *tcpClientConnectionAndSession) Send(data []byte) (int, error) {
 	if err := s.ensureConnected(); err != nil {
 		return 0, err
 	}
-
+	/* TODO: rewrite
 	switch s.protocolSend {
 	case PROTOCOL_RAW:
 		return s.conn.Write(data)
@@ -170,6 +171,8 @@ func (s *tcpClientConnectionAndSession) Send(data []byte) (int, error) {
 	default:
 		return 0, errors.New("invalid data transfer type")
 	}
+	*/
+	return 0, errors.New("Not implemented")
 
 }
 

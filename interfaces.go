@@ -1,6 +1,8 @@
 package main
 
-import "time"
+import (
+	"time"
+)
 
 type ConnectionInstance interface {
 	/* Send data directly from instance. This will not work if the instance
