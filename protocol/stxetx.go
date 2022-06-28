@@ -37,6 +37,7 @@ func (proto *stxetx) Receive(conn net.Conn) ([]byte, error) {
 
 		n, err := conn.Read(tcpReceiveBuffer)
 
+		fmt.Println("Read : ", string(receivedMsg), string(tcpReceiveBuffer))
 		if err != nil {
 			if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
 				//millisceondsSinceLastRead = millisceondsSinceLastRead + proto.settings.readTimeout_ms
@@ -48,6 +49,10 @@ func (proto *stxetx) Receive(conn net.Conn) ([]byte, error) {
 				receivedMsg = append(receivedMsg, tcpReceiveBuffer[:n]...)
 				break
 			}
+			if _, ok := err.(*net.OpError); ok {
+				break
+			}
+			fmt.Printf("Disconnect error maybe %#v\n ", err)
 			return []byte{}, err
 		}
 
@@ -58,10 +63,11 @@ func (proto *stxetx) Receive(conn net.Conn) ([]byte, error) {
 		// TODO: this ipmlementation potentially deletes everything after ETX if its transmitted too close
 		for _, x := range tcpReceiveBuffer[:n] {
 			if x == STX {
+				receivedMsg = []byte{} // start of text obsoletes all prior
 				continue
 			}
 			if x == ETX {
-				fmt.Println("got ETX")
+				fmt.Println("got ETX " + string(receivedMsg))
 				break
 			}
 			receivedMsg = append(receivedMsg, x)

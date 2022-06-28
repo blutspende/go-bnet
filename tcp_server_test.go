@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"io"
 	"log"
 	"os"
 	"testing"
@@ -259,6 +261,9 @@ func (s *testSTXETXProtocolSession) DataReceived(session Session, fileData []byt
 
 func (s *testSTXETXProtocolSession) Error(session Session, errorType ErrorType, err error) {
 	log.Fatal("Fatal error:", err)
+	if err == io.EOF {
+		fmt.Println("MAAAN, its only EOF !!!!!!!!!!!!!")
+	}
 }
 
 func TestSTXETXProtocol(t *testing.T) {
@@ -299,26 +304,26 @@ func TestSTXETXProtocol(t *testing.T) {
 		assert.NotNil(t, receivedMsg, "Received a valid response")
 		assert.Equal(t, TESTSTRING, string(receivedMsg))
 	case <-time.After(2 * time.Second):
-		t.Fatalf("Can not receive messages from the client")
+		t.Fatalf("Can not receive messages from the client - timeout")
 	}
-	/*
-		// expect "an adeqate response", that is the string the server sends back
-		var buffer []byte = make([]byte, 100)
 
-		largeDataPackage := ""
-		for i := 0; i < 8; i++ {
-			largeDataPackage = largeDataPackage + "X"
-		}
+	// expect "an adeqate response", that is the string the server sends back
+	var buffer []byte = make([]byte, 100)
 
-		_ = clientConn.SetDeadline(time.Now().Add(time.Second * 2))
-		n, err := clientConn.Read(buffer)
-		assert.Nil(t, err, "Reading from client")
-		assert.Equal(t, largeDataPackage, string(buffer[:n]))
+	largeDataPackage := ""
+	for i := 0; i < 8; i++ {
+		largeDataPackage = largeDataPackage + "X"
+	}
 
-		clientConn.Close()
-		tcpServer.Stop()
+	_ = clientConn.SetDeadline(time.Now().Add(time.Second * 2))
+	n, err := clientConn.Read(buffer)
+	assert.Nil(t, err, "Reading from client")
+	assert.Equal(t, largeDataPackage, string(buffer[:n]))
 
-		time.Sleep(time.Second * 1)
+	clientConn.Close()
+	tcpServer.Stop()
 
-		assert.True(t, handler.didReceiveDisconnectMessage, "Disconnect message was send")*/
+	time.Sleep(time.Second * 1)
+
+	assert.True(t, handler.didReceiveDisconnectMessage, "Disconnect message was send")
 }
