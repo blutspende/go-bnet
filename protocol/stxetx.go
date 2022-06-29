@@ -1,9 +1,11 @@
 package protocol
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"time"
 )
 
 type STXETXProtocolSettings struct {
@@ -35,9 +37,14 @@ func (proto *stxetx) Receive(conn net.Conn) ([]byte, error) {
 
 	for {
 
+		if proto.settings.readTimeout_ms > 0 {
+			if err := conn.SetReadDeadline(time.Now().Add(time.Millisecond * time.Duration(proto.settings.readTimeout_ms))); err != nil {
+				return []byte{}, err
+			}
+		}
+
 		n, err := conn.Read(tcpReceiveBuffer)
 
-		fmt.Println("Read : ", string(receivedMsg), string(tcpReceiveBuffer))
 		if err != nil {
 			if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
 				//millisceondsSinceLastRead = millisceondsSinceLastRead + proto.settings.readTimeout_ms
@@ -47,12 +54,12 @@ func (proto *stxetx) Receive(conn net.Conn) ([]byte, error) {
 				break // eof when no data was read at all = is not an error as such, rather an unwanted disconnect
 			} else if err == io.EOF {
 				receivedMsg = append(receivedMsg, tcpReceiveBuffer[:n]...)
-				break
+				return receivedMsg, nil
 			}
 			if _, ok := err.(*net.OpError); ok {
-				break
+				return []byte{}, errors.New("Connnection closed")
 			}
-			fmt.Printf("Disconnect error maybe %#v\n ", err)
+
 			return []byte{}, err
 		}
 
@@ -67,8 +74,8 @@ func (proto *stxetx) Receive(conn net.Conn) ([]byte, error) {
 				continue
 			}
 			if x == ETX {
-				fmt.Println("got ETX " + string(receivedMsg))
-				break
+				fmt.Println("got ETX ")
+				return receivedMsg, nil
 			}
 			receivedMsg = append(receivedMsg, x)
 		}
@@ -90,6 +97,6 @@ func (proto *stxetx) Send(conn net.Conn, data []byte) (int, error) {
 	sendbytes[len(data)+1] = ETX
 
 	n, err := conn.Write(sendbytes)
-
+	fmt.Println("wrote ", n, "bytes")
 	return n + 2, err
 }

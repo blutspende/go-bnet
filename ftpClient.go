@@ -63,6 +63,14 @@ func (c *ftpClientInstance) Stop() {
 	c.waitForTermination.Wait()
 }
 
+func (instance *ftpClientInstance) FindSessionsByIp(ip string) []Session {
+	sessions := make([]Session, 0)
+
+	// todo: same as tcpclient, but wasnt done at the time of creation
+
+	return sessions
+}
+
 // ---------- Session Methods starting here
 
 func (c *ftpClientInstance) IsAlive() bool {

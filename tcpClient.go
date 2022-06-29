@@ -75,6 +75,15 @@ func (s *tcpClientConnectionAndSession) Stop() {
 	s.Close()
 }
 
+func (instance *tcpClientConnectionAndSession) FindSessionsByIp(ip string) []Session {
+	sessions := make([]Session, 0)
+
+	// todo: restrict to only your remote
+	sessions = append(sessions, instance)
+
+	return sessions
+}
+
 func (s *tcpClientConnectionAndSession) RemoteAddress() (string, error) {
 	if s.conn != nil {
 		if err := s.ensureConnected(); err != nil {

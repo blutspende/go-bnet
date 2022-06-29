@@ -24,6 +24,7 @@ type tcpServerInstance struct {
 	listener         net.Listener
 	handler          Handler
 	mainLoopActive   *sync.WaitGroup
+	sessions         []*tcpServerSession
 }
 
 func CreateNewTCPServerInstance(listeningPort int, protocolReceiveve protocol.Implementation,
@@ -37,6 +38,7 @@ func CreateNewTCPServerInstance(listeningPort int, protocolReceiveve protocol.Im
 		sessionCount:     0,
 		handler:          nil,
 		mainLoopActive:   &sync.WaitGroup{},
+		sessions:         make([]*tcpServerSession, 0),
 	}
 }
 
@@ -70,8 +72,6 @@ func (instance *tcpServerInstance) Run(handler Handler) {
 	instance.isRunning = true
 	instance.mainLoopActive.Add(1)
 
-	sessions := make([]*tcpServerSession, 0)
-
 	for instance.isRunning {
 
 		connection, err := proxyListener.Accept()
@@ -99,19 +99,19 @@ func (instance *tcpServerInstance) Run(handler Handler) {
 			waitStartup := &sync.Mutex{}
 			waitStartup.Lock()
 			go func() {
-				sessions = append(sessions, session)
+				instance.sessions = append(instance.sessions, session)
 				instance.sessionCount++
 				waitStartup.Unlock()
 				instance.tcpSession(session)
 				instance.sessionCount--
-				sessions = removeSessionFromList(sessions, session)
+				instance.sessions = removeSessionFromList(instance.sessions, session)
 			}()
 			waitStartup.Lock() // wait for the startup to update the sessioncounter
 		}
 
 	}
 
-	for _, x := range sessions {
+	for _, x := range instance.sessions {
 		x.Close()
 	}
 	instance.listener.Close()
@@ -133,13 +133,25 @@ func removeSessionFromList(connections []*tcpServerSession, which *tcpServerSess
 	return ret
 }
 
+func (instance *tcpServerInstance) FindSessionsByIp(ip string) []Session {
+	sessions := make([]Session, 0)
+
+	for _, x := range instance.sessions {
+		if x.remoteAddr == ip {
+			sessions = append(sessions, x)
+		}
+	}
+
+	return sessions
+}
+
 type tcpServerSession struct {
 	conn                net.Conn
 	isRunning           bool
 	sessionActive       *sync.WaitGroup
 	timingConfig        TimingConfiguration
-	remoteAddr          *net.TCPAddr
-	protocolReceive     protocol.Implementation
+	remoteAddr          string
+	lowLevelProtocol    protocol.Implementation
 	handler             Handler
 	blockedForSending   *sync.Mutex
 	blockedForReceiving *sync.Mutex
@@ -155,10 +167,10 @@ func createTcpServerSession(conn net.Conn, handler Handler,
 		conn:                conn,
 		isRunning:           true,
 		sessionActive:       &sync.WaitGroup{},
-		protocolReceive:     protocolReceive,
+		lowLevelProtocol:    protocolReceive,
 		timingConfig:        timingConfiguration,
 		handler:             handler,
-		remoteAddr:          conn.RemoteAddr().(*net.TCPAddr),
+		remoteAddr:          "",
 		blockedForSending:   &sync.Mutex{},
 		blockedForReceiving: &sync.Mutex{},
 		hasDataToSend:       false,
@@ -171,10 +183,13 @@ func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 
 	session.sessionActive.Add(1)
 
-	go session.handler.Connected(session)
-
 	defer session.Close()
 	defer session.sessionActive.Done()
+
+	host, _, _ := net.SplitHostPort(session.conn.RemoteAddr().String())
+	session.remoteAddr = host
+
+	go session.handler.Connected(session)
 
 	for {
 
@@ -182,7 +197,7 @@ func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 			break
 		}
 
-		data, err := session.protocolReceive.Receive(session.conn)
+		data, err := session.lowLevelProtocol.Receive(session.conn)
 
 		if err != nil {
 			session.handler.Error(session, ErrorReceive, err)
@@ -202,7 +217,7 @@ func (s *tcpServerSession) IsAlive() bool {
 }
 
 func (s *tcpServerSession) Send(data []byte) (int, error) {
-	return s.protocolReceive.Send(s.conn, data)
+	return s.lowLevelProtocol.Send(s.conn, data)
 }
 
 func (s *tcpServerSession) Receive() ([]byte, error) {
@@ -227,9 +242,5 @@ func (session *tcpServerSession) WaitTermination() error {
 }
 
 func (session *tcpServerSession) RemoteAddress() (string, error) {
-	host, _, err := net.SplitHostPort(session.conn.RemoteAddr().String())
-	if err != nil {
-		return host, err
-	}
-	return host, nil
+	return session.remoteAddr, nil
 }
