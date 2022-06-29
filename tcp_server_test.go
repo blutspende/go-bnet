@@ -250,7 +250,7 @@ func (s *testSTXETXProtocolSession) DataReceived(session Session, fileData []byt
 	for i := 0; i < 8; i++ {
 		largeDataPackage = largeDataPackage + "X"
 	}
-	session.Send([]byte("\u0002" + largeDataPackage + "\u0003"))
+	session.Send([]byte(largeDataPackage))
 }
 
 func (s *testSTXETXProtocolSession) Error(session Session, errorType ErrorType, err error) {
@@ -268,7 +268,7 @@ func TestSTXETXProtocol(t *testing.T) {
 	handler.receiveQ = make(chan []byte, 500)
 
 	go tcpServer.Run(&handler)
-
+	fmt.Println("Probe 1")
 	// connect and expect connection handler to signal
 	clientConn, err := net.Dial("tcp", "127.0.0.1:4008")
 	if err != nil {
@@ -276,16 +276,17 @@ func TestSTXETXProtocol(t *testing.T) {
 	}
 
 	//----- send a small string
+	fmt.Println("sending now")
 	const TESTSTRING = "Submitting data test"
 	_, err = clientConn.Write([]byte("\u0002" + TESTSTRING + "\u0003"))
 	assert.Nil(t, err)
-
+	fmt.Println("Probe 1")
 	select {
 	case receivedMsg := <-handler.receiveQ:
 		assert.NotNil(t, receivedMsg, "Received a valid response")
 		assert.Equal(t, TESTSTRING, string(receivedMsg))
 	case <-time.After(2 * time.Second):
-		t.Fatalf("Can not receive messages from the client")
+		t.Fatalf("Timout ")
 	}
 
 	// expect "an adeqate response", that is the string the server sends back
@@ -300,11 +301,12 @@ func TestSTXETXProtocol(t *testing.T) {
 	sessions := tcpServer.FindSessionsByIp("127.0.0.1")
 	assert.Equal(t, 1, len(sessions), "excpect only one session to be found on FindSessionsByIp")
 	// _, err = sessions[0].Send([]byte(largeDataPackage))
-	assert.Nil(t, err, "Sending data to server")
+	//assert.Nil(t, err, "Sending data to server")
 
 	//_ = clientConn.SetDeadline(time.Now().Add(time.Second * 2))
 	buffer := make([]byte, 50)
 	_, err = clientConn.Read(buffer)
+	fmt.Println("reading was good")
 	assert.Nil(t, err, "Reading from client")
 	//assert.Equal(t, largeDataPackage, string(buffer[:n]))
 

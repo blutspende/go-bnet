@@ -16,17 +16,21 @@ type STXETXProtocolSettings struct {
 
 type stxetx struct {
 	settings *STXETXProtocolSettings
+	sendQ    chan []byte
 }
 
 func DefaultSTXETXProtocolSettings() *STXETXProtocolSettings {
 	var settings STXETXProtocolSettings
 	settings.maxBufferSize = 512 * 1024 * 1024
+	settings.flushTimeout_ms = -1
+	settings.readTimeout_ms = 50
 	return &settings
 }
 
 func STXETX(settings *STXETXProtocolSettings) Implementation {
 	return &stxetx{
 		settings: settings,
+		sendQ:    make(chan []byte, 1024),
 	}
 }
 
@@ -36,6 +40,13 @@ func (proto *stxetx) Receive(conn net.Conn) ([]byte, error) {
 	receivedMsg := make([]byte, proto.settings.maxBufferSize)
 
 	for {
+
+		select {
+		case dataToSend, ok := <-proto.sendQ:
+			fmt.Println("Sending data:", string(dataToSend), ok)
+		case <-time.After(50 * time.Millisecond):
+			// 50 milliseconds for data
+		}
 
 		if proto.settings.readTimeout_ms > 0 {
 			if err := conn.SetReadDeadline(time.Now().Add(time.Millisecond * time.Duration(proto.settings.readTimeout_ms))); err != nil {
@@ -57,7 +68,7 @@ func (proto *stxetx) Receive(conn net.Conn) ([]byte, error) {
 				return receivedMsg, nil
 			}
 			if _, ok := err.(*net.OpError); ok {
-				return []byte{}, errors.New("Connnection closed")
+				return []byte{}, errors.New("connnection closed by peer")
 			}
 
 			return []byte{}, err
@@ -96,7 +107,8 @@ func (proto *stxetx) Send(conn net.Conn, data []byte) (int, error) {
 	}
 	sendbytes[len(data)+1] = ETX
 
-	n, err := conn.Write(sendbytes)
-	fmt.Println("wrote ", n, "bytes")
-	return n + 2, err
+	fmt.Println("SendQ is stuffed")
+	proto.sendQ <- sendbytes
+
+	return len(sendbytes), nil
 }
