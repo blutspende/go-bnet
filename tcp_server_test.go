@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"testing"
@@ -244,10 +243,10 @@ func (s *testSTXETXProtocolSession) Disconnected(session Session) {
 
 func (s *testSTXETXProtocolSession) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
 	s.receiveQ <- fileData
-	fmt.Println("DataReceived", string(fileData))
+
 	// build a response that exceeds the MTU to ensure stx-etx reads start and stop codes
 	largeDataPackage := ""
-	for i := 0; i < 8; i++ {
+	for i := 0; i < 80000; i++ {
 		largeDataPackage = largeDataPackage + "X"
 	}
 	session.Send([]byte(largeDataPackage))
@@ -258,7 +257,10 @@ func (s *testSTXETXProtocolSession) Error(session Session, errorType ErrorType, 
 }
 
 func TestSTXETXProtocol(t *testing.T) {
-	tcpServer := CreateNewTCPServerInstance(4008,
+
+	const TESTSTRING = "Submitting data test"
+
+	tcpServer := CreateNewTCPServerInstance(4009,
 		protocol.STXETX(protocol.DefaultSTXETXProtocolSettings()),
 		NoLoadbalancer,
 		100,
@@ -268,53 +270,37 @@ func TestSTXETXProtocol(t *testing.T) {
 	handler.receiveQ = make(chan []byte, 500)
 
 	go tcpServer.Run(&handler)
-	fmt.Println("Probe 1")
-	// connect and expect connection handler to signal
-	clientConn, err := net.Dial("tcp", "127.0.0.1:4008")
+
+	clientConn, err := net.Dial("tcp", "127.0.0.1:4009")
 	if err != nil {
 		log.Fatalf("Failed to dial (this is not an error, rather a problem of the unit test itself) : %s", err)
 	}
 
-	//----- send a small string
-	fmt.Println("sending now")
-	const TESTSTRING = "Submitting data test"
 	_, err = clientConn.Write([]byte("\u0002" + TESTSTRING + "\u0003"))
 	assert.Nil(t, err)
-	fmt.Println("Probe 1")
+
 	select {
 	case receivedMsg := <-handler.receiveQ:
 		assert.NotNil(t, receivedMsg, "Received a valid response")
 		assert.Equal(t, TESTSTRING, string(receivedMsg))
 	case <-time.After(2 * time.Second):
-		t.Fatalf("Timout ")
+		t.Fatalf("Timout waiting on valid response. This means the Server was unable to receive this message ")
 	}
 
-	// expect "an adeqate response", that is the string the server sends back
-	// var buffer []byte = make([]byte, 100)
+	// At this point the server should respond to the received data with a few XXXes
+	_ = clientConn.SetDeadline(time.Now().Add(time.Second * 2))
+	buffer := make([]byte, 90000)
+	n, err := clientConn.Read(buffer)
+
+	assert.Nil(t, err, "Reading from client.")
 
 	largeDataPackage := ""
-	for i := 0; i < 8; i++ {
+	for i := 0; i < 80000; i++ {
 		largeDataPackage = largeDataPackage + "X"
 	}
 
-	// find our session
-	sessions := tcpServer.FindSessionsByIp("127.0.0.1")
-	assert.Equal(t, 1, len(sessions), "excpect only one session to be found on FindSessionsByIp")
-	// _, err = sessions[0].Send([]byte(largeDataPackage))
-	//assert.Nil(t, err, "Sending data to server")
+	assert.Equal(t, "\u0002"+largeDataPackage+"\u0003", string(buffer[:n]))
 
-	//_ = clientConn.SetDeadline(time.Now().Add(time.Second * 2))
-	buffer := make([]byte, 50)
-	_, err = clientConn.Read(buffer)
-	fmt.Println("reading was good")
-	assert.Nil(t, err, "Reading from client")
-	//assert.Equal(t, largeDataPackage, string(buffer[:n]))
+	tcpServer.Stop()
 
-	// clientConn.Close()
-
-	// tcpServer.Stop()
-
-	time.Sleep(time.Second * 1)
-
-	//assert.True(t, handler.didReceiveDisconnectMessage, "Disconnect message was send")
 }

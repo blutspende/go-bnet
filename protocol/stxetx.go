@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"time"
@@ -41,13 +40,6 @@ func (proto *stxetx) Receive(conn net.Conn) ([]byte, error) {
 
 	for {
 
-		select {
-		case dataToSend, ok := <-proto.sendQ:
-			fmt.Println("Sending data:", string(dataToSend), ok)
-		case <-time.After(50 * time.Millisecond):
-			// 50 milliseconds for data
-		}
-
 		if proto.settings.readTimeout_ms > 0 {
 			if err := conn.SetReadDeadline(time.Now().Add(time.Millisecond * time.Duration(proto.settings.readTimeout_ms))); err != nil {
 				return []byte{}, err
@@ -85,7 +77,6 @@ func (proto *stxetx) Receive(conn net.Conn) ([]byte, error) {
 				continue
 			}
 			if x == ETX {
-				fmt.Println("got ETX ")
 				return receivedMsg, nil
 			}
 			receivedMsg = append(receivedMsg, x)
@@ -96,7 +87,6 @@ func (proto *stxetx) Receive(conn net.Conn) ([]byte, error) {
 }
 
 func (proto *stxetx) Interrupt() {
-
 }
 
 func (proto *stxetx) Send(conn net.Conn, data []byte) (int, error) {
@@ -106,9 +96,5 @@ func (proto *stxetx) Send(conn net.Conn, data []byte) (int, error) {
 		sendbytes[i+1] = data[i]
 	}
 	sendbytes[len(data)+1] = ETX
-
-	fmt.Println("SendQ is stuffed")
-	proto.sendQ <- sendbytes
-
-	return len(sendbytes), nil
+	return conn.Write(sendbytes)
 }
