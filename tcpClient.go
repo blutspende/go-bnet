@@ -6,6 +6,8 @@ import (
 	"io"
 	"net"
 	"time"
+
+	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol"
 )
 
 /* One instance of client can only connect one
@@ -13,32 +15,29 @@ import (
    implements both interfaces
 */
 type tcpClientConnectionAndSession struct {
-	hostname        string
-	port            int
-	protocolReceive HighLevelProtocol
-	protocolSend    HighLevelProtocol
-	proxy           ProxyType
-	timingConfig    TimingConfiguration
-	conn            net.Conn
-	connected       bool
-	isStopped       bool
-	handler         Handler
+	hostname         string
+	port             int
+	lowLevelProtocol protocol.Implementation
+	proxy            ProxyType
+	timingConfig     TimingConfiguration
+	conn             net.Conn
+	connected        bool
+	isStopped        bool
+	handler          Handler
 }
 
 func CreateNewTCPClient(hostname string, port int,
-	protocolReceiveve HighLevelProtocol,
-	protocolSend HighLevelProtocol,
+	lowLevelProtocol protocol.Implementation,
 	proxy ProxyType, timing TimingConfiguration) ConnectionAndSessionInstance {
 	return &tcpClientConnectionAndSession{
-		hostname:        hostname,
-		port:            port,
-		protocolReceive: protocolReceiveve,
-		protocolSend:    protocolSend,
-		proxy:           proxy,
-		timingConfig:    timing,
-		connected:       false,
-		isStopped:       false,
-		handler:         nil, // is set by run
+		hostname:         hostname,
+		port:             port,
+		lowLevelProtocol: lowLevelProtocol,
+		proxy:            proxy,
+		timingConfig:     timing,
+		connected:        false,
+		isStopped:        false,
+		handler:          nil, // is set by run
 	}
 }
 
@@ -169,20 +168,8 @@ func (s *tcpClientConnectionAndSession) Send(data []byte) (int, error) {
 	if err := s.ensureConnected(); err != nil {
 		return 0, err
 	}
-	/* TODO: rewrite
-	switch s.protocolSend {
-	case PROTOCOL_RAW:
-		return s.conn.Write(data)
-	case PROTOCLOL_LIS1A1:
-		return 0, errors.New("not implemented")
-	case PROTOCOL_STXETX:
-		return protocol.SendWrappedStxProtocol(s.conn, data)
-	default:
-		return 0, errors.New("invalid data transfer type")
-	}
-	*/
-	return 0, errors.New("Not implemented")
 
+	return s.lowLevelProtocol.Send(s.conn, data)
 }
 
 func (s *tcpClientConnectionAndSession) ensureConnected() error {
