@@ -11,7 +11,7 @@ type TimingConfiguration struct {
 	PollInterval        time.Duration
 }
 
-var DefaultTCPServerTimings = TimingConfiguration{
+var DefaultTCPServerSettings = TimingConfiguration{
 	Timeout:             time.Second * 3,
 	Deadline:            time.Millisecond * 200,
 	FlushBufferTimoutMs: 500,

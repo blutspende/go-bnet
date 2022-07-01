@@ -144,23 +144,8 @@ func (s *tcpClientConnectionAndSession) Receive() ([]byte, error) {
 		}
 		return nil, err
 	}
-	/* TODO: rewrite
-	switch s.protocolReceive {
-	case PROTOCOL_RAW:
-		buff := make([]byte, 500)
-		n, err := s.conn.Read(buff)
-		return buff[:n], err
-	case PROTOCLOL_LIS1A1:
-		return nil, errors.New("not implemented")
-	case PROTOCOL_STXETX:
-		return protocol.ReceiveWrappedStxProtocol(s.conn)
-	default:
-		return nil, errors.New("invalid data transfer type")
-	}
-	*/
 
-	return nil, errors.New("Not implemented")
-
+	return s.lowLevelProtocol.Receive(s.conn)
 }
 
 func (s *tcpClientConnectionAndSession) Send(data []byte) (int, error) {

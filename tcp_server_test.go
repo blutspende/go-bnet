@@ -40,7 +40,7 @@ func (s *testRawDataProtocolSession) Error(session Session, errorType ErrorType,
 
 func TestRawDataProtocolWithTimeoutFlushMs(t *testing.T) {
 	tcpServer := CreateNewTCPServerInstance(4001,
-		protocol.Raw(protocol.DefaultRawProtocolSettings()), NoLoadbalancer, 100, DefaultTCPServerTimings)
+		protocol.Raw(protocol.DefaultRawProtocolSettings()), NoLoadbalancer, 100, DefaultTCPServerSettings)
 
 	var handler testRawDataProtocolSession
 	handler.receiveQ = make(chan []byte, 500)
@@ -105,7 +105,7 @@ func TestRawDataProtocolWithTimeoutFlushMs(t *testing.T) {
 // Create some stress by pushing a lot of transmissions
 func TestRawDataProtocolSendingStress(t *testing.T) {
 	tcpServer := CreateNewTCPServerInstance(4003,
-		protocol.Raw(protocol.DefaultRawProtocolSettings()), NoLoadbalancer, 100, DefaultTCPServerTimings)
+		protocol.Raw(protocol.DefaultRawProtocolSettings()), NoLoadbalancer, 100, DefaultTCPServerSettings)
 	var handler testRawDataProtocolSession
 	handler.receiveQ = make(chan []byte, 500)
 	go tcpServer.Run(&handler)
@@ -160,7 +160,7 @@ func TestTCPServerMaxConnections(t *testing.T) {
 		protocol.Raw(protocol.DefaultRawProtocolSettings()),
 		NoLoadbalancer,
 		2,
-		DefaultTCPServerTimings)
+		DefaultTCPServerSettings)
 
 	var handlerTcp testTCPServerMaxConnections
 	handlerTcp.maxConnectionErrorDidOccur = false
@@ -211,7 +211,7 @@ func TestTCPServerIdentifyRemoteAddress(t *testing.T) {
 		protocol.Raw(protocol.DefaultRawProtocolSettings()),
 		NoLoadbalancer,
 		2,
-		DefaultTCPServerTimings)
+		DefaultTCPServerSettings)
 
 	var handlerTcp testTCPServerRemoteAddress
 
@@ -264,7 +264,7 @@ func TestSTXETXProtocol(t *testing.T) {
 		protocol.STXETX(protocol.DefaultSTXETXProtocolSettings()),
 		NoLoadbalancer,
 		100,
-		DefaultTCPServerTimings)
+		DefaultTCPServerSettings)
 
 	var handler testSTXETXProtocolSession
 	handler.receiveQ = make(chan []byte, 500)
