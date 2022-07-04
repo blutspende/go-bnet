@@ -76,9 +76,8 @@ func TestClientConnectReceiveAndSendRaw(t *testing.T) {
 
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4001,
 		protocol.Raw(protocol.DefaultRawProtocolSettings()),
-		NoLoadbalancer,
+		NoLoadBalancer,
 		DefaultTCPServerSettings)
-
 
 	err := tcpClient.Connect()
 	assert.Nil(t, err)
@@ -111,7 +110,7 @@ func TestClientProtocolSTXETX(t *testing.T) {
 
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4002,
 		protocol.STXETX(protocol.DefaultSTXETXProtocolSettings()),
-		NoLoadbalancer, DefaultTCPServerSettings)
+		NoLoadBalancer, DefaultTCPServerSettings)
 
 	// Receiving from instrument expecting STX and ETX removed
 	TESTSTRING := "H|\\^&|||bloodlab-net|e2etest||||||||20220614163728\nL|1|N"
@@ -140,9 +139,8 @@ func TestClientRemoteAddress(t *testing.T) {
 
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4003,
 		protocol.STXETX(&protocol.STXETXProtocolSettings{}),
-		NoLoadbalancer,
+		NoLoadBalancer,
 		DefaultTCPServerSettings)
-
 
 	tcpClient.Connect()
 	addr, _ := tcpClient.RemoteAddress()
@@ -180,9 +178,8 @@ func TestClientRun(t *testing.T) {
 
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4004,
 		protocol.Raw(protocol.DefaultRawProtocolSettings()),
-		NoLoadbalancer,
+		NoLoadBalancer,
 		DefaultTCPServerSettings)
-
 
 	var session ClientTestSession
 	session.connectionEventOccured = false
