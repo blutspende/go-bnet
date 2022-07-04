@@ -3,7 +3,6 @@ package bloodlabnet
 import (
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"math/rand"
 	"net"
@@ -15,45 +14,45 @@ import (
 )
 
 type tcpServerInstance struct {
-	listeningPort   int
-	protocolReceive HighLevelProtocol
-	protocolSend    HighLevelProtocol
-	proxy           ProxyType
-	maxConnections  int
-	timingConfig    TimingConfiguration
-	isRunning       bool
-	sessionCount    int
-	listener        net.Listener
-	handler         Handler
-	mainLoopActive  *sync.WaitGroup
+	listeningPort    int
+	LowLevelProtocol protocol.Implementation
+	proxy            ProxyType
+	maxConnections   int
+	timingConfig     TimingConfiguration
+	isRunning        bool
+	sessionCount     int
+	listener         net.Listener
+	handler          Handler
+	mainLoopActive   *sync.WaitGroup
+	sessions         []*tcpServerSession
 }
 
-func CreateNewTCPServerInstance(listeningPort int, protocolReceiveve HighLevelProtocol,
-	protocolSend HighLevelProtocol, proxy ProxyType, maxConnections int, timingConfig TimingConfiguration) ConnectionInstance {
+func CreateNewTCPServerInstance(listeningPort int, protocolReceiveve protocol.Implementation,
+	proxy ProxyType, maxConnections int, timingConfig TimingConfiguration) ConnectionInstance {
 	return &tcpServerInstance{
-		listeningPort:   listeningPort,
-		protocolReceive: protocolReceiveve,
-		protocolSend:    protocolSend,
-		maxConnections:  maxConnections,
-		proxy:           proxy,
-		timingConfig:    timingConfig,
-		sessionCount:    0,
-		handler:         nil,
-		mainLoopActive:  &sync.WaitGroup{},
+		listeningPort:    listeningPort,
+		LowLevelProtocol: protocolReceiveve,
+		maxConnections:   maxConnections,
+		proxy:            proxy,
+		timingConfig:     timingConfig,
+		sessionCount:     0,
+		handler:          nil,
+		mainLoopActive:   &sync.WaitGroup{},
+		sessions:         make([]*tcpServerSession, 0),
 	}
 }
 
-func (instance *tcpServerInstance) Stop() {
-	instance.isRunning = false
-	instance.listener.Close()
-	instance.mainLoopActive.Wait()
+func (s *tcpServerInstance) Stop() {
+	s.isRunning = false
+	s.listener.Close()
+	s.mainLoopActive.Wait()
 }
 
-func (instance *tcpServerInstance) Send(data []byte) (int, error) {
+func (s *tcpServerInstance) Send(data []byte) (int, error) {
 	return 0, errors.New("server instance can not send data. What are you looking for, a broadcast to all clients that are connected ? ")
 }
 
-func (instance *tcpServerInstance) Receive() ([]byte, error) {
+func (s *tcpServerInstance) Receive() ([]byte, error) {
 	return nil, errors.New("TCP server can't receive messages. Hint: Use another method")
 }
 
@@ -73,14 +72,11 @@ func (instance *tcpServerInstance) Run(handler Handler) {
 	instance.isRunning = true
 	instance.mainLoopActive.Add(1)
 
-	sessions := make([]*tcpServerSession, 0)
-
 	for instance.isRunning {
 
 		connection, err := proxyListener.Accept()
 		if err != nil {
 			if instance.handler != nil && instance.isRunning {
-				log.Println(err)
 				go instance.handler.Error(nil, ErrorAccept, err)
 			}
 			continue
@@ -95,30 +91,29 @@ func (instance *tcpServerInstance) Run(handler Handler) {
 			continue
 		}
 
-		session, err := createTcpServerSession(connection, handler, instance.protocolReceive, instance.protocolSend, instance.timingConfig)
+		session, err := createTcpServerSession(connection, handler, instance.LowLevelProtocol, instance.timingConfig)
 		if err != nil {
-			log.Println(err)
+			fmt.Errorf("error creating a new TCP session: %w", err)
 			instance.handler.Error(session, ErrorCreateSession, err)
 		} else {
 			waitStartup := &sync.Mutex{}
 			waitStartup.Lock()
 			go func() {
-				sessions = append(sessions, session)
+				instance.sessions = append(instance.sessions, session)
 				instance.sessionCount++
 				waitStartup.Unlock()
 				instance.tcpSession(session)
 				instance.sessionCount--
-				sessions = removeSessionFromList(sessions, session)
+				instance.sessions = removeSessionFromList(instance.sessions, session)
 			}()
 			waitStartup.Lock() // wait for the startup to update the sessioncounter
 		}
 
 	}
 
-	for _, x := range sessions {
+	for _, x := range instance.sessions {
 		x.Close()
 	}
-
 	instance.listener.Close()
 
 	instance.handler = nil
@@ -138,30 +133,48 @@ func removeSessionFromList(connections []*tcpServerSession, which *tcpServerSess
 	return ret
 }
 
+func (instance *tcpServerInstance) FindSessionsByIp(ip string) []Session {
+	sessions := make([]Session, 0)
+
+	for _, x := range instance.sessions {
+		if x.remoteAddr == ip {
+			sessions = append(sessions, x)
+		}
+	}
+
+	return sessions
+}
+
 type tcpServerSession struct {
-	conn            net.Conn
-	isRunning       bool
-	sessionActive   *sync.WaitGroup
-	timingConfig    TimingConfiguration
-	remoteAddr      *net.TCPAddr
-	protocolReceive HighLevelProtocol
-	protocolSend    HighLevelProtocol
-	handler         Handler
+	conn                net.Conn
+	isRunning           bool
+	sessionActive       *sync.WaitGroup
+	timingConfig        TimingConfiguration
+	remoteAddr          string
+	lowLevelProtocol    protocol.Implementation
+	handler             Handler
+	blockedForSending   *sync.Mutex
+	blockedForReceiving *sync.Mutex
+	hasDataToSend       bool
+	dataToSend          *[]byte
 }
 
 func createTcpServerSession(conn net.Conn, handler Handler,
-	protocolReceive HighLevelProtocol, protocolSend HighLevelProtocol,
+	protocolReceive protocol.Implementation,
 	timingConfiguration TimingConfiguration) (*tcpServerSession, error) {
 
 	session := &tcpServerSession{
-		conn:            conn,
-		isRunning:       true,
-		sessionActive:   &sync.WaitGroup{},
-		protocolReceive: protocolReceive,
-		protocolSend:    protocolSend,
-		timingConfig:    timingConfiguration,
-		handler:         handler,
-		remoteAddr:      conn.RemoteAddr().(*net.TCPAddr),
+		conn:                conn,
+		isRunning:           true,
+		sessionActive:       &sync.WaitGroup{},
+		lowLevelProtocol:    protocolReceive,
+		timingConfig:        timingConfiguration,
+		handler:             handler,
+		remoteAddr:          "",
+		blockedForSending:   &sync.Mutex{},
+		blockedForReceiving: &sync.Mutex{},
+		hasDataToSend:       false,
+		dataToSend:          nil,
 	}
 	return session, nil
 }
@@ -170,15 +183,13 @@ func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 
 	session.sessionActive.Add(1)
 
-	tcpReceiveBuffer := make([]byte, 4096)
-	receivedMsg := make([]byte, 0)
-
-	go session.handler.Connected(session)
-
 	defer session.Close()
 	defer session.sessionActive.Done()
 
-	milliSecondsSinceLastRead := 0
+	host, _, _ := net.SplitHostPort(session.conn.RemoteAddr().String())
+	session.remoteAddr = host
+
+	go session.handler.Connected(session)
 
 	for {
 
@@ -186,65 +197,14 @@ func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 			break
 		}
 
-		// flush timeout for protocol RAW.
-		if instance.protocolReceive == PROTOCOL_RAW &&
-			instance.timingConfig.FlushBufferTimoutMs > 0 && // disabled timout ?
-			milliSecondsSinceLastRead > instance.timingConfig.FlushBufferTimoutMs &&
-			len(receivedMsg) > 0 { // buffer full, time up = flush it
-			session.handler.DataReceived(session, receivedMsg, time.Now())
-			receivedMsg = []byte{}
-		}
-
-		if err := session.conn.SetReadDeadline(time.Now().Add(time.Millisecond * 200)); err != nil {
-			return err
-		}
-		n, err := session.conn.Read(tcpReceiveBuffer)
+		data, err := session.lowLevelProtocol.Receive(session.conn)
 
 		if err != nil {
-			if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
-				milliSecondsSinceLastRead = milliSecondsSinceLastRead + 200
-				continue // on timeout....
-			} else if err == io.EOF {
-				// end of input (client disconnected)
-				if instance.protocolReceive == PROTOCOL_RAW {
-					// for raw protocol flush the cache on exit
-					session.handler.DataReceived(session, receivedMsg, time.Now())
-				}
-			} else {
-				if instance.isRunning {
-					session.handler.Error(session, ErrorReceive, err)
-				}
-			}
-			return err
-		}
-
-		if n == 0 {
-			// handler.DataReceived(session, receivedMsg, time.Now())
-			// return receivedMsg, err
-			continue
-		}
-
-		milliSecondsSinceLastRead = 0
-
-		for _, x := range tcpReceiveBuffer[:n] {
-			switch instance.protocolReceive {
-
-			case PROTOCOL_RAW:
-				// raw transmission ends only if the client disconnect
-				receivedMsg = append(receivedMsg, x)
-			case PROTOCOL_STXETX:
-				if x == protocol.STX {
-					continue
-				}
-				if x == protocol.ETX {
-					session.handler.DataReceived(session, receivedMsg, time.Now())
-					receivedMsg = []byte{}
-				} else {
-					receivedMsg = append(receivedMsg, x)
-				}
-			default:
-				return fmt.Errorf("this type is not implemented yet: %+v", instance.protocolReceive)
-			}
+			session.handler.Error(session, ErrorReceive, err)
+		} else {
+			// Imporant detail : the read loop is over when DataReceived event occurs. This means
+			// that at this point we can also send data
+			session.handler.DataReceived(session, data, time.Now())
 		}
 
 	}
@@ -257,43 +217,30 @@ func (s *tcpServerSession) IsAlive() bool {
 }
 
 func (s *tcpServerSession) Send(data []byte) (int, error) {
-	switch s.protocolSend {
-	case PROTOCOL_RAW:
-		return s.conn.Write(data)
-	case PROTOCLOL_LIS1A1:
-		return 0, errors.New("not implemented")
-	case PROTOCOL_STXETX:
-		return protocol.SendWrappedStxProtocol(s.conn, data)
-	default:
-		return 0, errors.New("invalid data transfer type")
-	}
+	return s.lowLevelProtocol.Send(s.conn, data)
 }
 
 func (s *tcpServerSession) Receive() ([]byte, error) {
 	return []byte{}, errors.New("you can not receive messages directly, use the event-handler instead")
 }
 
-func (s *tcpServerSession) Close() error {
-	if s.IsAlive() && s.conn != nil {
-		if s.handler != nil {
-			s.handler.Disconnected(s)
+func (session *tcpServerSession) Close() error {
+	if session.IsAlive() && session.conn != nil {
+		if session.handler != nil {
+			session.handler.Disconnected(session)
 		}
-		s.conn.Close()
-		s.isRunning = false
+		session.conn.Close()
+		session.conn = nil
+		session.isRunning = false
 		return nil
 	}
 	return nil
 }
 
-func (s *tcpServerSession) WaitTermination() error {
+func (session *tcpServerSession) WaitTermination() error {
 	return errors.New("not implemented yet")
 }
 
-func (s *tcpServerSession) RemoteAddress() (string, error) {
-	if s.conn != nil {
-		host, _, err := net.SplitHostPort(s.conn.RemoteAddr().String())
-		return host, err
-	} else {
-		return "", nil
-	}
+func (session *tcpServerSession) RemoteAddress() (string, error) {
+	return session.remoteAddr, nil
 }
