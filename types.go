@@ -1,4 +1,4 @@
-package main
+package bloodlabnet
 
 import (
 	"time"
@@ -34,7 +34,7 @@ const (
 type ProxyType int
 
 const (
-	NoLoadbalancer     ProxyType = 1
+	NoLoadBalancer     ProxyType = 1
 	HaProxySendProxyV2 ProxyType = 2
 )
 

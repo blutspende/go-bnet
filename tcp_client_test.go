@@ -1,4 +1,4 @@
-package main
+package bloodlabnet
 
 import (
 	"fmt"
@@ -79,6 +79,7 @@ func TestClientConnectReceiveAndSendRaw(t *testing.T) {
 		NoLoadbalancer,
 		DefaultTCPServerSettings)
 
+
 	err := tcpClient.Connect()
 	assert.Nil(t, err)
 
@@ -142,6 +143,7 @@ func TestClientRemoteAddress(t *testing.T) {
 		NoLoadbalancer,
 		DefaultTCPServerSettings)
 
+
 	tcpClient.Connect()
 	addr, _ := tcpClient.RemoteAddress()
 	assert.Equal(t, "127.0.0.1", addr)
@@ -180,6 +182,7 @@ func TestClientRun(t *testing.T) {
 		protocol.Raw(protocol.DefaultRawProtocolSettings()),
 		NoLoadbalancer,
 		DefaultTCPServerSettings)
+
 
 	var session ClientTestSession
 	session.connectionEventOccured = false
