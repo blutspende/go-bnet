@@ -23,19 +23,11 @@ var DefaultFTPClientTimings = TimingConfiguration{
 	PollInterval: time.Second * 60,
 }
 
-type HighLevelProtocol int
-
-const (
-	PROTOCOL_RAW     HighLevelProtocol = 1
-	PROTOCOL_STXETX  HighLevelProtocol = 2
-	PROTOCLOL_LIS1A1 HighLevelProtocol = 3
-)
-
 type ProxyType int
 
 const (
 	NoLoadBalancer     ProxyType = 1
-	HaProxySendProxyV2 ProxyType = 2
+	HAProxySendProxyV2 ProxyType = 2
 )
 
 type FileNameGeneration int

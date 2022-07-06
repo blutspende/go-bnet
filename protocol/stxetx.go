@@ -10,7 +10,6 @@ type STXETXProtocolSettings struct {
 
 type stxetx struct {
 	settings               *STXETXProtocolSettings
-	sendQ                  chan []byte
 	receiveQ               chan []byte
 	receiveThreadIsRunning bool
 }
@@ -20,10 +19,17 @@ func DefaultSTXETXProtocolSettings() *STXETXProtocolSettings {
 	return &settings
 }
 
-func STXETX(settings *STXETXProtocolSettings) Implementation {
+func STXETX(settings ...*STXETXProtocolSettings) Implementation {
+
+	var thesettings *STXETXProtocolSettings
+	if len(settings) >= 1 {
+		thesettings = settings[0]
+	} else {
+		thesettings = DefaultSTXETXProtocolSettings()
+	}
+
 	return &stxetx{
-		settings:               settings,
-		sendQ:                  make(chan []byte, 1024),
+		settings:               thesettings,
 		receiveQ:               make(chan []byte, 1024),
 		receiveThreadIsRunning: false,
 	}

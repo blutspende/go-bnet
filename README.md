@@ -1,31 +1,41 @@
 # Go BloodLab Net
 
-A libarary to communicate over various networking-protocols through one API. go-bloodlab-net works for systems that require blocked transfer and hides the implementation details, but is not suited for protocols that require control over the connection
+A libarary to simplify communication with laboratory instruments.
 
 ###### Install
 `go get github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net`
 
-### TCP/IP Client  with synchroneous reception
-Use this when you implement a client do not need asynchronous receiving.
+###### Features
+  - TCP/IP Server implementation
+  - TCP/IP Client implementation
+  - FTP Client implementation
+  - Low-level protocols : 
+      - RAW `protocol.Raw(protocol.DefaultRawProtocolSettings())` 
+	  - STX-ETX `` 
+	  - MLLP (for HL7) ``
+	  - Lis1A1  ``
+
+### TCP/IP Client 
+
+Create a client to send data. 
 
 ``` go
-tcpClient := CreateNewTCPClient("127.0.0.1", 4001, 
- PROTOCOL_RAW, // encoding of incoming data
- PROTOCOL_RAW, // encoding of sent data
- NoLoadBalancer, 
- DefaultTCPTiming)
+ tcpClient := CreateNewTCPClient("127.0.0.1", 4001,
+		protocol.Raw(),
+		NoLoadBalancer,
+		DefaultTCPServerSettings)
 
-if err := tcpClient.Connect(); err != nil {
-  log.Panic(err)
-}
+ if err := tcpClient.Connect(); err != nil {  
+   log.Panic(err)
+ }
 
-n, err := tcpClient.Send([]byte("Hello TCP/IP"))
-...
-message, err := tcpClient.Receive()
-...
+ // Sending Data
+ n, err := tcpClient.Send([]byte("Hello TCP/IP"))
+
+ // Receiving data
+ receivedMsg, err := tcpClient.Receive()
 ```
-### TCP/IP Client with asynchroneous reception
-Use this when you implement a client and transmissions may occur asynchroneous.
+### TCP/IP Server
 
 ``` go
 import "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/net"
@@ -47,20 +57,17 @@ func (s *MySessionData) Error(session Session, errorType ErrorType, err error) {
 }
 // Event: Data received
 func (s *MySessionData) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
-	fmt.Println("Data received")
+	fmt.Println("Data received : ", string(fileData))
 }
 
 func main() {
 
-  tcpClient := CreateNewTCPClient("127.0.0.1", 4001, 
-  PROTOCOL_RAW, // protocol for incoming
-  PROTOCOL_RAW, // protocol for sending
-  NoLoadbalancer, 
-  DefaultTCPTiming)
-    
-  go v.Run(MySessionData) // this starts the asynchroneous process 
+  server := CreateNewTCPServerInstance(4009,
+		protocol.STXETX(),  // use STX-ETX protocl
+		HAProxySendProxyV2,  // Deal with the header and ignore empty requests
+		100) // Max Connections	 
   
-  v.Send([]byte{ENQ}) // sync. sending is still possible 
+  go server.Run(MySessionData) // this starts the asynchroneous process 
   ...
 ```
 
@@ -98,11 +105,24 @@ tcpServer := CreateNewTCPServerInstance(4002,
 ### SFTP Client
 Connect to a sftp server and keep polling. New files are presented through same API like TCP-Server and TCP-Client as if they were transmitted that way.
 
-```go
-  server:= CreateNewFTPClient("127.0.0.1", 22, "/somewhere", "*.*", "testuser", "testpass", "",
-	"YYMMDDHHMMSS.dat", // fileNamePattern for generating filenames
-	RenameWhenRead, // how to treat processed files
-		PROTOCOL_RAW, // protocol for receiving
-		PROTOCOL_RAW, // protoocl for sending
-  DefaultFTPClientTimings) ConnectionAndSessionInstance
+### Protocols
+
+#### Raw Protocol (TCP/Client + TCP/Server)
+Raw communication for tcp-ip. 
+
+#### STX-ETX Protocol (TCP/Client + TCP/Server)
+Mesasge are embedded in <STX> (Ascii 0x02) and <ETX> (Ascii 0x03) to indicate start and end. At the end of each transmission the transmissions contents are passed further for higher level protocols.
+
+```Transmission example
+ .... <STX>Some data<ETX> This data here is ignored <STX>More data<ETX> ....
 ```
+
+#### MLLP Protocol (TCP/Client + TCP/Server)
+Mesasge are embedded in <VT> (Ascii 11) and <FS> (Ascii 28) terminated with <CR> (Ascii 13) to indicate start and end. At the end of each transmission the transmissions contents are passed further for higher level protocols.
+
+```Transmission example
+ .... <VT>Some data<FS><CR> This data here is ignored <VT>More data<FS><CR> ....
+```
+
+#### Lis1A1 Protocol (TCP/Client + TCP/Server)
+Lis1A1 is a low level protocol for submitting data to laboratory instruments, typically via serial line.

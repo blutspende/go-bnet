@@ -28,13 +28,19 @@ type tcpServerInstance struct {
 }
 
 func CreateNewTCPServerInstance(listeningPort int, protocolReceiveve protocol.Implementation,
-	proxy ProxyType, maxConnections int, timingConfig TimingConfiguration) ConnectionInstance {
+	proxy ProxyType, maxConnections int, timingConfig ...TimingConfiguration) ConnectionInstance {
+
+	var thetimingConfig TimingConfiguration
+	if len(timingConfig) == 0 {
+		thetimingConfig = DefaultTCPServerSettings
+	}
+
 	return &tcpServerInstance{
 		listeningPort:    listeningPort,
 		LowLevelProtocol: protocolReceiveve,
 		maxConnections:   maxConnections,
 		proxy:            proxy,
-		timingConfig:     timingConfig,
+		timingConfig:     thetimingConfig,
 		sessionCount:     0,
 		handler:          nil,
 		mainLoopActive:   &sync.WaitGroup{},

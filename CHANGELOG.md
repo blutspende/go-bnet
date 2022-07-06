@@ -2,4 +2,6 @@
 
  - fix: STX-ETX can now continously receive data
  - change: removed timeouts for STX-ETX
+ - change: Factory Methods for TCPServer and TCPClient updated for simplicity
+ - update: readme
 
