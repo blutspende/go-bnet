@@ -15,32 +15,29 @@ import (
    implements both interfaces
 */
 type tcpClientConnectionAndSession struct {
-	hostname        string
-	port            int
-	protocolReceive HighLevelProtocol
-	protocolSend    HighLevelProtocol
-	proxy           ProxyType
-	timingConfig    TimingConfiguration
-	conn            net.Conn
-	connected       bool
-	isStopped       bool
-	handler         Handler
+	hostname         string
+	port             int
+	lowLevelProtocol protocol.Implementation
+	proxy            ProxyType
+	timingConfig     TimingConfiguration
+	conn             net.Conn
+	connected        bool
+	isStopped        bool
+	handler          Handler
 }
 
 func CreateNewTCPClient(hostname string, port int,
-	protocolReceiveve HighLevelProtocol,
-	protocolSend HighLevelProtocol,
+	lowLevelProtocol protocol.Implementation,
 	proxy ProxyType, timing TimingConfiguration) ConnectionAndSessionInstance {
 	return &tcpClientConnectionAndSession{
-		hostname:        hostname,
-		port:            port,
-		protocolReceive: protocolReceiveve,
-		protocolSend:    protocolSend,
-		proxy:           proxy,
-		timingConfig:    timing,
-		connected:       false,
-		isStopped:       false,
-		handler:         nil, // is set by run
+		hostname:         hostname,
+		port:             port,
+		lowLevelProtocol: lowLevelProtocol,
+		proxy:            proxy,
+		timingConfig:     timing,
+		connected:        false,
+		isStopped:        false,
+		handler:          nil, // is set by run
 	}
 }
 
@@ -75,6 +72,15 @@ func (s *tcpClientConnectionAndSession) Run(handler Handler) {
 func (s *tcpClientConnectionAndSession) Stop() {
 	s.isStopped = true
 	s.Close()
+}
+
+func (instance *tcpClientConnectionAndSession) FindSessionsByIp(ip string) []Session {
+	sessions := make([]Session, 0)
+
+	// todo: restrict to only your remote
+	sessions = append(sessions, instance)
+
+	return sessions
 }
 
 func (s *tcpClientConnectionAndSession) RemoteAddress() (string, error) {
@@ -139,19 +145,7 @@ func (s *tcpClientConnectionAndSession) Receive() ([]byte, error) {
 		return nil, err
 	}
 
-	switch s.protocolReceive {
-	case PROTOCOL_RAW:
-		buff := make([]byte, 500)
-		n, err := s.conn.Read(buff)
-		return buff[:n], err
-	case PROTOCLOL_LIS1A1:
-		return nil, errors.New("not implemented")
-	case PROTOCOL_STXETX:
-		return protocol.ReceiveWrappedStxProtocol(s.conn)
-	default:
-		return nil, errors.New("invalid data transfer type")
-	}
-
+	return s.lowLevelProtocol.Receive(s.conn)
 }
 
 func (s *tcpClientConnectionAndSession) Send(data []byte) (int, error) {
@@ -160,17 +154,7 @@ func (s *tcpClientConnectionAndSession) Send(data []byte) (int, error) {
 		return 0, err
 	}
 
-	switch s.protocolSend {
-	case PROTOCOL_RAW:
-		return s.conn.Write(data)
-	case PROTOCLOL_LIS1A1:
-		return 0, errors.New("not implemented")
-	case PROTOCOL_STXETX:
-		return protocol.SendWrappedStxProtocol(s.conn, data)
-	default:
-		return 0, errors.New("invalid data transfer type")
-	}
-
+	return s.lowLevelProtocol.Send(s.conn, data)
 }
 
 func (s *tcpClientConnectionAndSession) ensureConnected() error {

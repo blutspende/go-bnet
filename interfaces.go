@@ -1,6 +1,8 @@
 package bloodlabnet
 
-import "time"
+import (
+	"time"
+)
 
 type ConnectionInstance interface {
 	// Send  data directly from instance. This will not work if the instance
@@ -11,6 +13,9 @@ type ConnectionInstance interface {
 	Run(handler Handler)
 	// Stop the main-loop of the Run-handler
 	Stop()
+	/* Retrieve a session by IP. Do not use this for a normal protocol conversion of a server... Can return nil
+	 */
+	FindSessionsByIp(ip string) []Session
 }
 
 type Session interface {
