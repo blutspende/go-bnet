@@ -20,7 +20,7 @@ type stxetx struct {
 
 func DefaultSTXETXProtocolSettings() *STXETXProtocolSettings {
 	var settings STXETXProtocolSettings
-	settings.maxBufferSize = 512 * 1024 * 1024
+	settings.maxBufferSize = 4096
 	settings.flushTimeout_ms = -1
 	settings.readTimeout_ms = 50
 	return &settings
