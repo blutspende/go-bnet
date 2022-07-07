@@ -6,41 +6,30 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/jlaffaye/ftp"
-	//"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
 
 type ftpClientInstance struct {
-	hostname string
-	port     int
-	path     string
-	//fileMask           string
-	user     string
-	password string
-	//pubKey             string
-	//readFilePolicy     ReadFilePolicy
-	//fileNamePattern    FileNameGeneration
+	hostname      string
+	port          int
+	path          string
+	user          string
+	password      string
 	timings       TimingConfiguration
 	sshConnection *ssh.Client
-	//sftpClient         *sftp.Client
-	ftpClient          *ftp.ServerConn
-	isRunning          bool
-	waitForTermination *sync.WaitGroup
+	ftpClient     *ftp.ServerConn
+	isConnected   bool
 }
 
 func CreateNewFTPClient(
 	hostname string,
 	port int,
 	path string,
-	//fileMask string,
 	user string,
 	password string,
-	//fileNamePattern FileNameGeneration,
-	//readFilePolicy ReadFilePolicy,
 	timings TimingConfiguration,
 	secureConnectionOptions ...SecureConnectionOptions) ConnectionAndSessionInstance {
 	if secureConnectionOptions != nil {
@@ -51,45 +40,28 @@ func CreateNewFTPClient(
 		hostname: hostname,
 		port:     port,
 		path:     path,
-		//fileMask:           fileMask,
 		user:     user,
 		password: password,
-		//pubKey:             secureConnectionOptions.PublicKey,
-		//readFilePolicy:     readFilePolicy,
-		//fileNamePattern:    fileNamePattern,
-		timings:            timings,
-		waitForTermination: &sync.WaitGroup{},
+		timings:  timings,
 	}
 }
 
 func (c *ftpClientInstance) Run(handler Handler) {
-	c.waitForTermination.Add(1)
-	c.isRunning = true
-
-	for c.isRunning {
-		time.Sleep(c.timings.PollInterval)
-	}
-
-	c.waitForTermination.Done()
+	panic("Run is not implemented yet!")
 }
 
 func (c *ftpClientInstance) Stop() {
-	c.isRunning = false
-	c.waitForTermination.Wait()
+	c.isConnected = false
 }
 
 func (instance *ftpClientInstance) FindSessionsByIp(ip string) []Session {
-	sessions := make([]Session, 0)
-
-	// todo: same as tcpclient, but wasnt done at the time of creation
-
-	return sessions
+	panic("FindSessionsByIp is not implemented yet!")
 }
 
 // ---------- Session Methods starting here
 
 func (c *ftpClientInstance) IsAlive() bool {
-	return c.isRunning
+	return c.isConnected
 }
 
 func (c *ftpClientInstance) Send(msg []byte) (int, error) {
@@ -118,7 +90,7 @@ func (c *ftpClientInstance) Receive() ([]byte, error) {
 }
 
 func (c *ftpClientInstance) Close() error {
-	if !c.isRunning {
+	if !c.isConnected {
 		return nil
 	}
 
@@ -126,7 +98,7 @@ func (c *ftpClientInstance) Close() error {
 		return err
 	}
 
-	c.isRunning = false
+	c.isConnected = false
 
 	return nil
 }
@@ -148,7 +120,7 @@ func (c *ftpClientInstance) RemoteAddress() (string, error) {
 }
 
 func (c *ftpClientInstance) Connect() error {
-	if c.isRunning {
+	if c.isConnected {
 		return nil
 	}
 
@@ -166,7 +138,7 @@ func (c *ftpClientInstance) Connect() error {
 	}
 
 	c.ftpClient = serverConnection
-	c.isRunning = true
+	c.isConnected = true
 
 	return nil
 }

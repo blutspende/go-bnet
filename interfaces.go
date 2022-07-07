@@ -13,8 +13,7 @@ type ConnectionInstance interface {
 	Run(handler Handler)
 	// Stop the main-loop of the Run-handler
 	Stop()
-	/* Retrieve a session by IP. Do not use this for a normal protocol conversion of a server... Can return nil
-	 */
+	// Retrieve a session by IP. Do not use this for a normal protocol conversion of a server... Can return nil
 	FindSessionsByIp(ip string) []Session
 }
 

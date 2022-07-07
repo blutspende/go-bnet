@@ -18,8 +18,9 @@ func getTimingConfigurations() TimingConfiguration {
 	return DefaultFTPClientSettings
 }
 
+// TODO: Remove these when FTP server is implemented
 func getFtpUsername() string {
-	username := "Arcane"
+	username := "YOUR_FTP_USERNAME"
 
 	if username == "YOUR_FTP_USERNAME" {
 		panic("FTP is not configured properly")
@@ -28,7 +29,7 @@ func getFtpUsername() string {
 	return username
 }
 func getFtpPassword() string {
-	return "shgxcer"
+	return "YOUR_FTP_PASSWORD"
 }
 func getFtpServerAddress() string {
 	return "127.0.0.1"
@@ -44,12 +45,8 @@ func getFtpClientWithWrongUser() ConnectionAndSessionInstance {
 		getFtpServerAddress(),
 		21,
 		getExistingFilename(),
-		//"",
 		"this-user-is-not-created",
 		"its-a-wrong-password",
-		//"",
-		//Default,
-		//ReadAndLeaveFile,
 		DefaultFTPClientSettings,
 	)
 
@@ -63,12 +60,8 @@ func getFtpClient() ConnectionAndSessionInstance {
 		getFtpServerAddress(),
 		21,
 		getExistingFilename(),
-		//"",
 		getFtpUsername(),
 		getFtpPassword(),
-		//"",
-		//Default,
-		//ReadAndLeaveFile,
 		DefaultFTPClientSettings,
 	)
 
@@ -82,12 +75,8 @@ func getFtpClientWithNotExistingFile() ConnectionAndSessionInstance {
 		getFtpServerAddress(),
 		21,
 		"qwertzuiopasdfghjklyxcvbnm.txt",
-		//"",
 		getFtpUsername(),
 		getFtpPassword(),
-		//"",
-		//Default,
-		//ReadAndLeaveFile,
 		DefaultFTPClientSettings,
 	)
 
