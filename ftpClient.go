@@ -2,26 +2,22 @@ package bloodlabnet
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"time"
 
 	"github.com/jlaffaye/ftp"
-	"golang.org/x/crypto/ssh"
 )
 
 type ftpClientInstance struct {
-	hostname      string
-	port          int
-	path          string
-	user          string
-	password      string
-	timings       TimingConfiguration
-	sshConnection *ssh.Client
-	ftpClient     *ftp.ServerConn
-	isConnected   bool
+	hostname    string
+	port        int
+	path        string
+	user        string
+	password    string
+	timings     TimingConfiguration
+	ftpClient   *ftp.ServerConn
+	isConnected bool
 }
 
 func CreateNewFTPClient(
@@ -51,7 +47,7 @@ func (c *ftpClientInstance) Run(handler Handler) {
 }
 
 func (c *ftpClientInstance) Stop() {
-	c.isConnected = false
+	panic("Stop is not implemented yet!")
 }
 
 func (instance *ftpClientInstance) FindSessionsByIp(ip string) []Session {
@@ -104,19 +100,11 @@ func (c *ftpClientInstance) Close() error {
 }
 
 func (c *ftpClientInstance) WaitTermination() error {
-	return nil
+	panic("WaitTermination is not implemented yet!")
 }
 
 func (c *ftpClientInstance) RemoteAddress() (string, error) {
-	if c.sshConnection != nil {
-		host, _, err := net.SplitHostPort(c.sshConnection.Conn.RemoteAddr().String())
-		if err != nil {
-			return host, err
-		}
-		return host, err
-	} else {
-		return "", errors.New("no ftp connection")
-	}
+	panic("RemoteAddress is not implemented yet!")
 }
 
 func (c *ftpClientInstance) Connect() error {
