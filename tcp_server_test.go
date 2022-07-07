@@ -1,6 +1,7 @@
 package bloodlabnet
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"testing"
@@ -301,6 +302,75 @@ func TestSTXETXProtocol(t *testing.T) {
 	}
 
 	assert.Equal(t, "\u0002"+largeDataPackage+"\u0003", string(buffer[:n]))
+
+	tcpServer.Stop()
+}
+
+//----------------------------------------------------------------------------------------
+// Test STX Protocol with Packages larger than the buffer and 2 messages in the stream
+// STX first string ETX data to be ignored STX second string ETX
+// expecting this to create two data-received events
+//----------------------------------------------------------------------------------------
+type testSTXETXBufferOverflowProtocolSession struct {
+	receiveQ                    chan []byte
+	didReceiveDisconnectMessage bool
+}
+
+func (s *testSTXETXBufferOverflowProtocolSession) Connected(session Session) {
+}
+
+func (s *testSTXETXBufferOverflowProtocolSession) Disconnected(session Session) {
+	s.didReceiveDisconnectMessage = true
+}
+
+func (s *testSTXETXBufferOverflowProtocolSession) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
+	fmt.Println("Eventhandler : ", string(fileData))
+	s.receiveQ <- fileData
+}
+
+func (s *testSTXETXBufferOverflowProtocolSession) Error(session Session, errorType ErrorType, err error) {
+	log.Fatal("Fatal error:", err)
+}
+
+func TestSTXETXBufferOverflowProtocol(t *testing.T) {
+
+	const TESTSTRING = "Submitting data test"
+	const TESTSTRING2 = "This is the second datapackage within the same datastream"
+
+	tcpServer := CreateNewTCPServerInstance(4010,
+		protocol.STXETX(protocol.DefaultSTXETXProtocolSettings()),
+		NoLoadBalancer,
+		100,
+		DefaultTCPServerSettings)
+
+	var handler testSTXETXBufferOverflowProtocolSession
+	handler.receiveQ = make(chan []byte, 500)
+
+	go tcpServer.Run(&handler)
+
+	clientConn, err := net.Dial("tcp", "127.0.0.1:4010")
+	if err != nil {
+		log.Fatalf("Failed to dial (this is not an error, rather a problem of the unit test itself) : %s", err)
+	}
+
+	_, err = clientConn.Write([]byte("\u0002" + TESTSTRING + "\u0003IngoredData}\u0002" + TESTSTRING2 + "\u0003"))
+	assert.Nil(t, err)
+
+	select {
+	case receivedMsg := <-handler.receiveQ:
+		assert.NotNil(t, receivedMsg, "Received a valid response")
+		assert.Equal(t, TESTSTRING, string(receivedMsg))
+	case <-time.After(2 * time.Second):
+		t.Fatalf("Timout waiting on valid response. This means the Server was unable to receive this message ")
+	}
+
+	select {
+	case receivedMsg := <-handler.receiveQ:
+		assert.NotNil(t, receivedMsg, "Received a valid response")
+		assert.Equal(t, TESTSTRING2, string(receivedMsg))
+	case <-time.After(2 * time.Second):
+		t.Fatalf("Timout waiting on valid response. This means the Server was unable to receive this message ")
+	}
 
 	tcpServer.Stop()
 }
