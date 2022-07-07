@@ -10,20 +10,17 @@ A libarary to simplify communication with laboratory instruments.
   - TCP/IP Client implementation
   - FTP Client implementation
   - Low-level protocols : 
-      - RAW `protocol.Raw(protocol.DefaultRawProtocolSettings())` 
-	  - STX-ETX `` 
-	  - MLLP (for HL7) ``
-	  - Lis1A1  ``
+      - RAW `protocol.Raw()` 
+	  - STX-ETX `protocol.STXETX()`  
+	  - MLLP (for HL7) `protocol.MLLP()`
+	  - Lis1A1  `protocol.Lis1A1()`
 
 ### TCP/IP Client 
 
 Create a client to send data. 
 
 ``` go
- tcpClient := CreateNewTCPClient("127.0.0.1", 4001,
-		protocol.Raw(),
-		NoLoadBalancer,
-		DefaultTCPServerSettings)
+ tcpClient := CreateNewTCPClient("127.0.0.1", 4001, protocol.Raw(), NoLoadBalancer)
 
  if err := tcpClient.Connect(); err != nil {  
    log.Panic(err)
@@ -38,8 +35,6 @@ Create a client to send data.
 ### TCP/IP Server
 
 ``` go
-import "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/net"
-
 type MySessionData struct {
 }
 
@@ -57,7 +52,10 @@ func (s *MySessionData) Error(session Session, errorType ErrorType, err error) {
 }
 // Event: Data received
 func (s *MySessionData) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
-	fmt.Println("Data received : ", string(fileData))
+  fmt.Println("Data received : ", string(fileData))
+  
+  // Sending data for the session
+  session.Send([]byte("Some testdata"))
 }
 
 func main() {
@@ -71,37 +69,6 @@ func main() {
   ...
 ```
 
-### TCP Server
-
-``` go
-type myHandler struct{}
-
-func (s *myHandler) Connected(session Session) {
-}
-
-func (s *myHandler) Disconnected(session Session) {
-}
-
-func (s *myHandler) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
-}
-
-func (s *myHandler) Error(session Session, errorType ErrorType, err error) {
-}
-
-func main() {
-
-tcpServer := CreateNewTCPServerInstance(4002,
-		PROTOCOL_RAW,
-		PROTOCOL_RAW,
-		NoLoadbalancer,
-		2,
-		DefaultTCPServerTimings)
-
-	var handlerTcp testTCPServerMaxConnections
-	go tcpServer.Run(&handlerTcp)
-
-}
-```
 ### SFTP Client
 Connect to a sftp server and keep polling. New files are presented through same API like TCP-Server and TCP-Client as if they were transmitted that way.
 
