@@ -38,24 +38,22 @@ Create a client to send data.
 type MySessionData struct {
 }
 
-// Event: New conncetin est.
 func (s *MySessionData) Connected(session Session) {
 	fmt.Println("Connected Event")
 }
-// Event: Disconnected
+
 func (s *MySessionData) Connected(session Session) {
 	fmt.Println("Disconnected Event")
 }
-// Event: Some error occurred
+
 func (s *MySessionData) Error(session Session, errorType ErrorType, err error) {
   fmt.Println(err)
 }
-// Event: Data received
+
 func (s *MySessionData) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
   fmt.Println("Data received : ", string(fileData))
   
-  // Sending data for the session
-  session.Send([]byte("Some testdata"))
+  session.Send([]byte(fmt.Sprintf("You are sending from %s", session.GetRemoteAddress())))
 }
 
 func main() {
