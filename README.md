@@ -1,108 +1,91 @@
 # Go BloodLab Net
 
-A libarary to communicate over various networking-protocols through one API. go-bloodlab-net works for systems that require blocked transfer and hides the implementation details, but is not suited for protocols that require control over the connection
+A libarary to simplify communication with laboratory instruments.
 
 ###### Install
 `go get github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net`
 
-### TCP/IP Client  with synchroneous reception
-Use this when you implement a client do not need asynchronous receiving.
+###### Features
+  - TCP/IP Server implementation
+  - TCP/IP Client implementation
+  - FTP Client implementation
+  - Low-level protocols : 
+      - RAW `protocol.Raw()` 
+	  - STX-ETX `protocol.STXETX()`  
+	  - MLLP (for HL7) `protocol.MLLP()`
+	  - Lis1A1  `protocol.Lis1A1()`
+
+### TCP/IP Client 
+
+Create a client to send data. 
 
 ``` go
-tcpClient := CreateNewTCPClient("127.0.0.1", 4001, 
- PROTOCOL_RAW, // encoding of incoming data
- PROTOCOL_RAW, // encoding of sent data
- NoLoadBalancer, 
- DefaultTCPTiming)
+ tcpClient := CreateNewTCPClient("127.0.0.1", 4001, protocol.Raw(), NoLoadBalancer)
 
-if err := tcpClient.Connect(); err != nil {
-  log.Panic(err)
-}
+ if err := tcpClient.Connect(); err != nil {  
+   log.Panic(err)
+ }
 
-n, err := tcpClient.Send([]byte("Hello TCP/IP"))
-...
-message, err := tcpClient.Receive()
-...
+ n, err := tcpClient.Send([]byte("Hello TCP/IP"))
+
+ receivedMsg, err := tcpClient.Receive()
 ```
-### TCP/IP Client with asynchroneous reception
-Use this when you implement a client and transmissions may occur asynchroneous.
+### TCP/IP Server
 
 ``` go
-import "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/net"
-
 type MySessionData struct {
 }
 
-// Event: New conncetin est.
 func (s *MySessionData) Connected(session Session) {
 	fmt.Println("Connected Event")
 }
-// Event: Disconnected
+
 func (s *MySessionData) Connected(session Session) {
 	fmt.Println("Disconnected Event")
 }
-// Event: Some error occurred
+
 func (s *MySessionData) Error(session Session, errorType ErrorType, err error) {
   fmt.Println(err)
 }
-// Event: Data received
+
 func (s *MySessionData) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
-	fmt.Println("Data received")
+  fmt.Println("Data received : ", string(fileData))
+  
+  session.Send([]byte(fmt.Sprintf("You are sending from %s", session.GetRemoteAddress())))
 }
 
 func main() {
 
-  tcpClient := CreateNewTCPClient("127.0.0.1", 4001, 
-  PROTOCOL_RAW, // protocol for incoming
-  PROTOCOL_RAW, // protocol for sending
-  NoLoadbalancer, 
-  DefaultTCPTiming)
-    
-  go v.Run(MySessionData) // this starts the asynchroneous process 
+  server := CreateNewTCPServerInstance(4009,
+		protocol.STXETX(),
+		HAProxySendProxyV2,  
+		100) // Max Connections	 
   
-  v.Send([]byte{ENQ}) // sync. sending is still possible 
+  go server.Run(MySessionData) 
   ...
 ```
 
-### TCP Server
-
-``` go
-type myHandler struct{}
-
-func (s *myHandler) Connected(session Session) {
-}
-
-func (s *myHandler) Disconnected(session Session) {
-}
-
-func (s *myHandler) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
-}
-
-func (s *myHandler) Error(session Session, errorType ErrorType, err error) {
-}
-
-func main() {
-
-tcpServer := CreateNewTCPServerInstance(4002,
-		PROTOCOL_RAW,
-		PROTOCOL_RAW,
-		NoLoadbalancer,
-		2,
-		DefaultTCPServerTimings)
-
-	var handlerTcp testTCPServerMaxConnections
-	go tcpServer.Run(&handlerTcp)
-
-}
-```
 ### SFTP Client
 Connect to a sftp server and keep polling. New files are presented through same API like TCP-Server and TCP-Client as if they were transmitted that way.
 
-```go
-  server:= CreateNewFTPClient("127.0.0.1", 22, "/somewhere", "*.*", "testuser", "testpass", "",
-	"YYMMDDHHMMSS.dat", // fileNamePattern for generating filenames
-	RenameWhenRead, // how to treat processed files
-		PROTOCOL_RAW, // protocol for receiving
-		PROTOCOL_RAW, // protoocl for sending
-  DefaultFTPClientTimings) ConnectionAndSessionInstance
+### Protocols
+
+#### Raw Protocol (TCP/Client + TCP/Server)
+Raw communication for tcp-ip. 
+
+#### STX-ETX Protocol (TCP/Client + TCP/Server)
+Mesasge are embedded in <STX> (Ascii 0x02) and <ETX> (Ascii 0x03) to indicate start and end. At the end of each transmission the transmissions contents are passed further for higher level protocols.
+
+```Transmission example
+ .... <STX>Some data<ETX> This data here is ignored <STX>More data<ETX> ....
 ```
+
+#### MLLP Protocol (TCP/Client + TCP/Server)
+Mesasge are embedded in <VT> (Ascii 11) and <FS> (Ascii 28) terminated with <CR> (Ascii 13) to indicate start and end. At the end of each transmission the transmissions contents are passed further for higher level protocols.
+
+```Transmission example
+ .... <VT>Some data<FS><CR> This data here is ignored <VT>More data<FS><CR> ....
+```
+
+#### Lis1A1 Protocol (TCP/Client + TCP/Server)
+Lis1A1 is a low level protocol for submitting data to laboratory instruments, typically via serial line.

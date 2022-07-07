@@ -7,3 +7,17 @@ type Implementation interface {
 	Interrupt()
 	Send(conn net.Conn, data []byte) (int, error)
 }
+
+// The internal Protocolmessage type helps to communicate within the protocol
+type protocolMessageType int
+
+const (
+	DATA protocolMessageType = iota
+	EOF
+	ERROR
+)
+
+type protocolMessage struct {
+	Status protocolMessageType
+	Data   []byte
+}
