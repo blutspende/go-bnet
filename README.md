@@ -33,36 +33,47 @@ Create a client to send data.
 ### TCP/IP Server
 
 ``` go
-type MySessionData struct {
+package main
+
+import (
+	"fmt"
+	"time"
+
+	bloodlabnet "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net"
+	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol"
+)
+
+type MySessionHandler struct {
 }
 
-func (s *MySessionData) Connected(session Session) {
-	fmt.Println("Connected Event")
-}
-
-func (s *MySessionData) Connected(session Session) {
+func (s *MySessionHandler) Connected(session bloodlabnet.Session) {
 	fmt.Println("Disconnected Event")
 }
 
-func (s *MySessionData) Error(session Session, errorType ErrorType, err error) {
-  fmt.Println(err)
+func (s *MySessionHandler) Disconnected(session bloodlabnet.Session) {
+	fmt.Println("Disconnected Event")
 }
 
-func (s *MySessionData) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
-  fmt.Println("Data received : ", string(fileData))
-  
-  session.Send([]byte(fmt.Sprintf("You are sending from %s", session.GetRemoteAddress())))
+func (s *MySessionHandler) Error(session bloodlabnet.Session, errorType bloodlabnet.ErrorType, err error) {
+	fmt.Println(err)
+}
+
+func (s *MySessionHandler) DataReceived(session bloodlabnet.Session, data []byte, receiveTimestamp time.Time) {
+	rad, _ := session.RemoteAddress()
+	fmt.Println("From %s received : ", rad, sstring(data))
+
+	session.Send([]byte(fmt.Sprintf("You are sending from %s", rad)))
 }
 
 func main() {
 
-  server := CreateNewTCPServerInstance(4009,
+	server := bloodlabnet.CreateNewTCPServerInstance(4009,
 		protocol.STXETX(),
-		HAProxySendProxyV2,  
-		100) // Max Connections	 
-  
-  go server.Run(MySessionData) 
-  ...
+		bloodlabnet.HAProxySendProxyV2,
+		100) // Max Connections
+
+	server.Run(&MySessionHandler{})
+}
 ```
 
 ### SFTP Client
