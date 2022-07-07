@@ -95,12 +95,14 @@ func TestRawDataProtocolWithTimeoutFlushMs(t *testing.T) {
 	assert.Equal(t, "An adequate response", string(buffer[:n]))
 
 	clientConn.Close()
-	tcpServer.Stop()
 
 	time.Sleep(time.Second * 1)
 
 	assert.True(t, handler.didReceiveDisconnectMessage, "Disconnect message was send")
+
+	tcpServer.Stop()
 	assert.True(t, isServerHalted, "Server has been stopped")
+
 }
 
 // Create some stress by pushing a lot of transmissions
@@ -191,23 +193,6 @@ func TestTCPServerMaxConnections(t *testing.T) {
 //------------------------------------------------------
 // Server identifies the remote-Address
 //------------------------------------------------------
-type testTCPServerRemoteAddress struct {
-	lastConnectionSource string
-}
-
-func (s *testTCPServerRemoteAddress) Connected(session Session) {
-	s.lastConnectionSource, _ = session.RemoteAddress()
-}
-
-func (s *testTCPServerRemoteAddress) Disconnected(session Session) {
-}
-
-func (s *testTCPServerRemoteAddress) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
-}
-
-func (s *testTCPServerRemoteAddress) Error(session Session, errorType ErrorType, err error) {
-}
-
 func TestTCPServerIdentifyRemoteAddress(t *testing.T) {
 	tcpServer := CreateNewTCPServerInstance(4005,
 		protocol.Raw(protocol.DefaultRawProtocolSettings()),
@@ -215,7 +200,7 @@ func TestTCPServerIdentifyRemoteAddress(t *testing.T) {
 		2,
 		DefaultTCPServerSettings)
 
-	var handlerTcp testTCPServerRemoteAddress
+	var handlerTcp genericRecordingHandler
 
 	go tcpServer.Run(&handlerTcp)
 
@@ -225,7 +210,7 @@ func TestTCPServerIdentifyRemoteAddress(t *testing.T) {
 
 	time.Sleep(time.Second * 1) // sessions start async, therefor a short waitign is required
 
-	assert.Equal(t, "127.0.0.1", handlerTcp.lastConnectionSource)
+	assert.Equal(t, "127.0.0.1", handlerTcp.lastConnectedIp)
 }
 
 //--------------------------------------------------------------
@@ -314,9 +299,12 @@ func TestSTXETXProtocol(t *testing.T) {
 type genericRecordingHandler struct {
 	receiveQ                    chan []byte
 	didReceiveDisconnectMessage bool
+	lastConnectedIp             string
+	lasterror                   error
 }
 
 func (s *genericRecordingHandler) Connected(session Session) {
+	s.lastConnectedIp, s.lasterror = session.RemoteAddress()
 }
 
 func (s *genericRecordingHandler) Disconnected(session Session) {

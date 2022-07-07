@@ -18,8 +18,8 @@ type tcpClientConnectionAndSession struct {
 	hostname         string
 	port             int
 	lowLevelProtocol protocol.Implementation
-	proxy            ProxyType
-	timingConfig     TimingConfiguration
+	proxy            ConnectionType
+	timingConfig     TCPServerConfiguration
 	conn             net.Conn
 	connected        bool
 	isStopped        bool
@@ -28,8 +28,8 @@ type tcpClientConnectionAndSession struct {
 
 func CreateNewTCPClient(hostname string, port int,
 	lowLevelProtocol protocol.Implementation,
-	proxy ProxyType, timing ...TimingConfiguration) ConnectionAndSessionInstance {
-	var thetiming TimingConfiguration
+	proxy ConnectionType, timing ...TCPServerConfiguration) ConnectionAndSessionInstance {
+	var thetiming TCPServerConfiguration
 	if len(timing) == 0 {
 		thetiming = DefaultTCPServerSettings
 	} else {
