@@ -11,6 +11,10 @@ type TimingConfiguration struct {
 	PollInterval        time.Duration
 }
 
+type SecureConnectionOptions struct {
+	PublicKey string
+}
+
 var DefaultTCPServerSettings = TimingConfiguration{
 	Timeout:             time.Second * 3,
 	Deadline:            time.Millisecond * 200,
