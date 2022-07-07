@@ -31,6 +31,7 @@ type mllp struct {
 	settings               *MLLPProtocolSettings
 	receiveQ               chan protocolMessage
 	receiveThreadIsRunning bool
+	connectionIsValid      bool
 }
 
 func DefaultMLLPProtocolSettings() *MLLPProtocolSettings {
@@ -64,11 +65,13 @@ func MLLP(settings ...*MLLPProtocolSettings) Implementation {
 		settings:               thesettings,
 		receiveQ:               make(chan protocolMessage, 1024),
 		receiveThreadIsRunning: false,
+		connectionIsValid:      false,
 	}
 }
 
 func (proto *mllp) Receive(conn net.Conn) ([]byte, error) {
 
+	proto.connectionIsValid = true
 	proto.ensureReceiveThreadRunning(conn)
 
 	// TODO Timeout
@@ -124,16 +127,24 @@ func (proto *mllp) ensureReceiveThreadRunning(conn net.Conn) {
 						}
 					}
 
+					proto.connectionIsValid = false // invalid connections can not be written to anymore
+
 					messageEOF := protocolMessage{Status: EOF}
 					proto.receiveQ <- messageEOF
 					proto.receiveThreadIsRunning = false
 					return
 				} else if err == io.EOF { // EOF = silent exit
+
+					proto.connectionIsValid = false // invalid connections can not be written to anymore
+
 					messageEOF := protocolMessage{Status: EOF}
 					proto.receiveQ <- messageEOF
 					proto.receiveThreadIsRunning = false
 					return
 				}
+
+				proto.connectionIsValid = false // invalid connections can not be written to anymore
+
 				messageERROR := protocolMessage{Status: ERROR, Data: []byte(err.Error())}
 				proto.receiveQ <- messageERROR
 				proto.receiveThreadIsRunning = false
@@ -161,12 +172,18 @@ func (proto *mllp) Interrupt() {
 }
 
 func (proto *mllp) Send(conn net.Conn, data []byte) (int, error) {
-	sendbytes := make([]byte, len(data)+3)
-	sendbytes[0] = proto.settings.startByte
-	for i := 0; i < len(data); i++ {
-		sendbytes[i+1] = data[i]
+
+	if proto.connectionIsValid {
+
+		sendbytes := make([]byte, len(data)+3)
+		sendbytes[0] = proto.settings.startByte
+		for i := 0; i < len(data); i++ {
+			sendbytes[i+1] = data[i]
+		}
+		sendbytes[len(data)+1] = proto.settings.endByte
+		sendbytes[len(data)+2] = proto.settings.lineBreakByte
+		return conn.Write(sendbytes)
 	}
-	sendbytes[len(data)+1] = proto.settings.endByte
-	sendbytes[len(data)+2] = proto.settings.lineBreakByte
-	return conn.Write(sendbytes)
+
+	return 0, io.EOF
 }
