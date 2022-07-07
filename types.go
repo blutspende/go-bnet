@@ -4,34 +4,38 @@ import (
 	"time"
 )
 
-type TimingConfiguration struct {
-	Timeout             time.Duration
-	Deadline            time.Duration
-	FlushBufferTimoutMs int
-	PollInterval        time.Duration
+type TCPServerConfiguration struct {
+	Timeout                 time.Duration
+	Deadline                time.Duration
+	FlushBufferTimoutMs     int
+	PollInterval            time.Duration
+	SessionAfterFirstByte   bool
+	SessionInitationTimeout time.Duration
 }
 
 type SecureConnectionOptions struct {
 	PublicKey string
 }
 
-var DefaultTCPServerSettings = TimingConfiguration{
-	Timeout:             time.Second * 3,
-	Deadline:            time.Millisecond * 200,
-	FlushBufferTimoutMs: 500,
-	PollInterval:        time.Second * 60,
+var DefaultTCPServerSettings = TCPServerConfiguration{
+	Timeout:                 time.Second * 3,
+	Deadline:                time.Millisecond * 200,
+	FlushBufferTimoutMs:     500,
+	PollInterval:            time.Second * 60,
+	SessionAfterFirstByte:   true,            // Sessions are initiated after reading the first bytes (avoids disconnects)
+	SessionInitationTimeout: time.Second * 0, // Waiting forever by default
 }
 
-var DefaultFTPClientTimings = TimingConfiguration{
+var DefaultFTPClientTimings = TCPServerConfiguration{
 	Timeout:      time.Second * 5,
 	PollInterval: time.Second * 60,
 }
 
-type ProxyType int
+type ConnectionType int
 
 const (
-	NoLoadBalancer     ProxyType = 1
-	HAProxySendProxyV2 ProxyType = 2
+	NoLoadBalancer     ConnectionType = 1
+	HAProxySendProxyV2 ConnectionType = 2
 )
 
 type FileNameGeneration int

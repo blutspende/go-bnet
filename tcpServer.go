@@ -1,6 +1,7 @@
 package bloodlabnet
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -17,9 +18,9 @@ import (
 type tcpServerInstance struct {
 	listeningPort    int
 	LowLevelProtocol protocol.Implementation
-	proxy            ProxyType
+	connectionType   ConnectionType
 	maxConnections   int
-	timingConfig     TimingConfiguration
+	timingConfig     TCPServerConfiguration
 	isRunning        bool
 	sessionCount     int
 	listener         net.Listener
@@ -28,10 +29,51 @@ type tcpServerInstance struct {
 	sessions         []*tcpServerSession
 }
 
-func CreateNewTCPServerInstance(listeningPort int, protocolReceiveve protocol.Implementation,
-	proxy ProxyType, maxConnections int, timingConfig ...TimingConfiguration) ConnectionInstance {
+//--------------------------------------------------------------------------------------------
+// BufferedConn wrapping the net.Conn yet compatible for better reading performance and a
+// peek preview.
+//--------------------------------------------------------------------------------------------
+type BufferedConn struct {
+	r        *bufio.Reader
+	net.Conn // So that most methods are embedded
+}
 
-	var thetimingConfig TimingConfiguration
+func newBufferedConn(c net.Conn) BufferedConn {
+	return BufferedConn{bufio.NewReader(c), c}
+}
+
+func newBufferedConnSize(c net.Conn, n int) BufferedConn {
+	return BufferedConn{bufio.NewReaderSize(c, n), c}
+}
+
+func (b BufferedConn) Peek(n int) ([]byte, error) {
+	return b.r.Peek(n)
+}
+
+func (b BufferedConn) Read(p []byte) (int, error) {
+	return b.r.Read(p)
+}
+
+func (b BufferedConn) FirstByteOrError(howLong time.Duration) error {
+
+	if howLong > 0 {
+		b.Conn.SetReadDeadline(time.Now().Add(howLong))
+	}
+	_, err := b.Peek(1)
+
+	if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
+		return io.EOF // first byte not received in desired time = disconnect
+	} else if opErr, ok := err.(*net.OpError); ok && opErr.Op == "read" {
+		return io.EOF
+	}
+
+	return nil
+}
+
+func CreateNewTCPServerInstance(listeningPort int, protocolReceiveve protocol.Implementation,
+	connectionType ConnectionType, maxConnections int, timingConfig ...TCPServerConfiguration) ConnectionInstance {
+
+	var thetimingConfig TCPServerConfiguration
 	if len(timingConfig) == 0 {
 		thetimingConfig = DefaultTCPServerSettings
 	}
@@ -40,7 +82,7 @@ func CreateNewTCPServerInstance(listeningPort int, protocolReceiveve protocol.Im
 		listeningPort:    listeningPort,
 		LowLevelProtocol: protocolReceiveve,
 		maxConnections:   maxConnections,
-		proxy:            proxy,
+		connectionType:   connectionType,
 		timingConfig:     thetimingConfig,
 		sessionCount:     0,
 		handler:          nil,
@@ -100,8 +142,7 @@ func (instance *tcpServerInstance) Run(handler Handler) {
 
 		session, err := createTcpServerSession(connection, handler, instance.LowLevelProtocol, instance.timingConfig)
 		if err != nil {
-			fmt.Errorf("error creating a new TCP session: %w", err)
-			instance.handler.Error(session, ErrorCreateSession, err)
+			instance.handler.Error(session, ErrorCreateSession, fmt.Errorf("error creating a new TCP session - %w", err))
 		} else {
 			waitStartup := &sync.Mutex{}
 			waitStartup.Lock()
@@ -153,10 +194,10 @@ func (instance *tcpServerInstance) FindSessionsByIp(ip string) []Session {
 }
 
 type tcpServerSession struct {
-	conn                net.Conn
+	conn                BufferedConn
 	isRunning           bool
 	sessionActive       *sync.WaitGroup
-	timingConfig        TimingConfiguration
+	config              TCPServerConfiguration
 	remoteAddr          string
 	lowLevelProtocol    protocol.Implementation
 	handler             Handler
@@ -168,14 +209,14 @@ type tcpServerSession struct {
 
 func createTcpServerSession(conn net.Conn, handler Handler,
 	protocolReceive protocol.Implementation,
-	timingConfiguration TimingConfiguration) (*tcpServerSession, error) {
+	timingConfiguration TCPServerConfiguration) (*tcpServerSession, error) {
 
 	session := &tcpServerSession{
-		conn:                conn,
+		conn:                newBufferedConn(conn),
 		isRunning:           true,
 		sessionActive:       &sync.WaitGroup{},
 		lowLevelProtocol:    protocolReceive,
-		timingConfig:        timingConfiguration,
+		config:              timingConfiguration,
 		handler:             handler,
 		remoteAddr:          "",
 		blockedForSending:   &sync.Mutex{},
@@ -190,13 +231,20 @@ func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 
 	session.sessionActive.Add(1)
 
-	defer session.Close()
 	defer session.sessionActive.Done()
 
 	host, _, _ := net.SplitHostPort(session.conn.RemoteAddr().String())
 	session.remoteAddr = host
 
-	go session.handler.Connected(session)
+	// Portscanners and other players disconnect rather quickly; The first Byte sent breaks this delay
+	if session.config.SessionAfterFirstByte {
+		if session.conn.FirstByteOrError(session.config.SessionInitationTimeout) != nil {
+			return nil // no error, a connection is regarded as "never established"
+		}
+	}
+
+	defer session.Close()
+	session.handler.Connected(session)
 
 	for {
 
@@ -208,6 +256,7 @@ func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 		if err != nil {
 			if err == io.EOF {
 				// EOF is not an error, its a disconnect in TCP-terms: clean exit
+				session.handler.Disconnected(session)
 				session.isRunning = false
 				break
 			}
@@ -238,12 +287,11 @@ func (session *tcpServerSession) Receive() ([]byte, error) {
 }
 
 func (session *tcpServerSession) Close() error {
-	if session.IsAlive() && session.conn != nil {
+	if session.IsAlive() {
 		if session.handler != nil {
 			session.handler.Disconnected(session)
 		}
 		session.conn.Close()
-		session.conn = nil
 		session.isRunning = false
 		return nil
 	}

@@ -101,3 +101,24 @@ Mesasge are embedded in <VT> (Ascii 11) and <FS> (Ascii 28) terminated with <CR>
 
 #### Lis1A1 Protocol (TCP/Client + TCP/Server)
 Lis1A1 is a low level protocol for submitting data to laboratory instruments, typically via serial line.
+
+
+### TCP/IP Server Configuration
+
+#### Connection timeout
+Portscanners or Loadbalancers do connect just to disconnect a second later. By default the session initiation
+happens not on connect, rather when the first byte is sent. 
+
+Notice that certain instruments require the connection to remain opened, even if there is no data. 
+
+##### Disable the connection-timeout
+``` golang
+config := DefaultTCPServerSettings
+config.SessionAfterFirstByte = false // Default: true
+```
+
+##### Require the first Byte to be sent within a timelimit 
+``` golang
+config := DefaultTCPServerSettings
+config.SessionInitationTimeout = time.Second * 3  // Default: 0
+```

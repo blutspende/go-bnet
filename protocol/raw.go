@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"io"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -59,11 +60,12 @@ func (proto *rawprotocol) Receive(conn net.Conn) ([]byte, error) {
 		if proto.settings.flushTimeout_ms > 0 && // disabled timout ?
 			millisceondsSinceLastRead > proto.settings.flushTimeout_ms &&
 			len(receivedMsg) > 0 { // buffer full, time up = flush it
-			break
+			return receivedMsg, nil
 		}
 
 		if proto.settings.readTimeout_ms > 0 {
 			if err := conn.SetReadDeadline(time.Now().Add(time.Millisecond * time.Duration(proto.settings.readTimeout_ms))); err != nil {
+				log.Println("Read timeout")
 				return []byte{}, err
 			}
 		}
@@ -74,13 +76,20 @@ func (proto *rawprotocol) Receive(conn net.Conn) ([]byte, error) {
 			if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
 				millisceondsSinceLastRead = millisceondsSinceLastRead + proto.settings.readTimeout_ms
 				continue // on timeout....
-			} else if opErr, ok := err.(*net.OpError); ok && opErr.Op == "read" && len(receivedMsg)+n == 0 {
-				receivedMsg = append(receivedMsg, tcpReceiveBuffer[:n]...)
-				break // eof when no data was read at all = is not an error as such, rather an unwanted disconnect
+			} else if opErr, ok := err.(*net.OpError); ok && opErr.Op == "read" {
+
+				if len(receivedMsg)+n > 0 { // Process the remainder of the cache
+					receivedMsg = append(receivedMsg, tcpReceiveBuffer[:n]...)
+				}
+
+				return receivedMsg, io.EOF // clean exit
+
 			} else if err == io.EOF {
 				receivedMsg = append(receivedMsg, tcpReceiveBuffer[:n]...)
-				break
+
+				return receivedMsg, io.EOF // clean exit
 			}
+
 			return []byte{}, err
 		}
 
@@ -93,7 +102,7 @@ func (proto *rawprotocol) Receive(conn net.Conn) ([]byte, error) {
 
 	}
 
-	return receivedMsg, nil
+	return receivedMsg, io.EOF
 }
 
 func (proto *rawprotocol) Interrupt() {

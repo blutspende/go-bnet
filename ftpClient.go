@@ -15,7 +15,7 @@ type ftpClientInstance struct {
 	path        string
 	user        string
 	password    string
-	timings     TimingConfiguration
+	timings     TCPServerConfiguration
 	ftpClient   *ftp.ServerConn
 	isConnected bool
 }
@@ -26,7 +26,7 @@ func CreateNewFTPClient(
 	path string,
 	user string,
 	password string,
-	timings TimingConfiguration,
+	timings TCPServerConfiguration,
 	secureConnectionOptions ...SecureConnectionOptions) ConnectionAndSessionInstance {
 	if secureConnectionOptions != nil {
 		panic("SFTP client is not implemented yet!")
