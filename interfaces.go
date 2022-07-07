@@ -35,7 +35,7 @@ type ConnectionAndSessionInstance interface {
 
 type Handler interface {
 	//DataReceived event is triggered whenever the underlying protocol delivered a complete block(file/transmission) of data
-	DataReceived(session Session, fileData []byte, receiveTimestamp time.Time)
+	DataReceived(session Session, data []byte, receiveTimestamp time.Time)
 	// Connected event is triggered when connection is established. For client as well as for servers. 	For clients in addition every time the connection had
 	// to be reestablished
 	Connected(session Session)

@@ -31,10 +31,17 @@ func DefaultRawProtocolSettings() *RawProtocolSettings {
    readTimeout_ms required to enable the flush timeout
    flushTimeout_ms >1 for a timeout when the receive buffer is beeing forwared, 0 to disable
 */
-func Raw(settings *RawProtocolSettings) Implementation {
+func Raw(settings ...*RawProtocolSettings) Implementation {
+
+	var thesettings *RawProtocolSettings
+	if len(settings) >= 1 {
+		thesettings = settings[0]
+	} else {
+		thesettings = DefaultRawProtocolSettings()
+	}
 
 	return &rawprotocol{
-		settings:               settings,
+		settings:               thesettings,
 		blockReceivingMainloop: &sync.Mutex{},
 	}
 }
