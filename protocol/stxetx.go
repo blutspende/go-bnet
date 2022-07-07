@@ -13,6 +13,7 @@ type stxetx struct {
 	settings               *STXETXProtocolSettings
 	receiveQ               chan protocolMessage
 	receiveThreadIsRunning bool
+	connectionIsValid      bool
 }
 
 func DefaultSTXETXProtocolSettings() *STXETXProtocolSettings {
@@ -33,11 +34,13 @@ func STXETX(settings ...*STXETXProtocolSettings) Implementation {
 		settings:               thesettings,
 		receiveQ:               make(chan protocolMessage, 1024),
 		receiveThreadIsRunning: false,
+		connectionIsValid:      false,
 	}
 }
 
 func (proto *stxetx) Receive(conn net.Conn) ([]byte, error) {
 
+	proto.connectionIsValid = true
 	proto.ensureReceiveThreadRunning(conn)
 
 	// TODO Timeout
@@ -93,11 +96,16 @@ func (proto *stxetx) ensureReceiveThreadRunning(conn net.Conn) {
 						}
 					}
 
+					proto.connectionIsValid = false // invalid connections can not be written to anymore
+
 					messageEOF := protocolMessage{Status: EOF, Data: []byte{}}
 					proto.receiveQ <- messageEOF
 					proto.receiveThreadIsRunning = false
 					return
 				} else if err == io.EOF { // EOF = silent exit
+
+					proto.connectionIsValid = false // invalid connections can not be written to anymore
+
 					messageEOF := protocolMessage{Status: EOF}
 					proto.receiveQ <- messageEOF
 
@@ -105,9 +113,8 @@ func (proto *stxetx) ensureReceiveThreadRunning(conn net.Conn) {
 					return
 				}
 
-				//if err == io.ErrClosedPipe {
-				fmt.Printf("Struc %+v\n", err)
-				//}
+				proto.connectionIsValid = false // invalid connections can not be written to anymore
+
 				messageERROR := protocolMessage{Status: ERROR, Data: []byte(err.Error())}
 				proto.receiveQ <- messageERROR
 				proto.receiveThreadIsRunning = false
@@ -135,11 +142,16 @@ func (proto *stxetx) Interrupt() {
 }
 
 func (proto *stxetx) Send(conn net.Conn, data []byte) (int, error) {
-	sendbytes := make([]byte, len(data)+2)
-	sendbytes[0] = STX
-	for i := 0; i < len(data); i++ {
-		sendbytes[i+1] = data[i]
+
+	if proto.connectionIsValid {
+		sendbytes := make([]byte, len(data)+2)
+		sendbytes[0] = STX
+		for i := 0; i < len(data); i++ {
+			sendbytes[i+1] = data[i]
+		}
+		sendbytes[len(data)+1] = ETX
+		return conn.Write(sendbytes)
 	}
-	sendbytes[len(data)+1] = ETX
-	return conn.Write(sendbytes)
+
+	return 0, io.EOF
 }

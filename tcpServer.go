@@ -208,10 +208,12 @@ func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 		if err != nil {
 			if err == io.EOF {
 				// EOF is not an error, its a disconnect in TCP-terms: clean exit
+				session.isRunning = false
 				break
 			}
+
 			session.handler.Error(session, ErrorReceive, err)
-			session.isRunning = false
+
 		} else {
 			// Important detail : the read loop is over when DataReceived event occurs. This means
 			// that at this point we can also send data
