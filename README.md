@@ -112,13 +112,13 @@ happens not on connect, rather when the first byte is sent.
 Notice that certain instruments require the connection to remain opened, even if there is no data. 
 
 ##### Disable conneciton timeout
-``` 
-    config := DefaultTCPServerSettings
-	config.SessionAfterFirstByte = false	 // Default is true
+``` golang
+config := DefaultTCPServerSettings
+config.SessionAfterFirstByte = false	 // Default is true
 ```
 
 ##### Require the first Byte to be sent within a timelimit
-``` 
-    config := DefaultTCPServerSettings
-	config.SessionInitationTimeout = time.Second * 3
+``` golang
+config := DefaultTCPServerSettings
+config.SessionInitationTimeout = time.Second * 3
 ```
