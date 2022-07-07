@@ -1,12 +1,6 @@
 package bloodlabnet
 
-import (
-	"errors"
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-)
-
+/*
 func Test_FTP_Client_Connect(t *testing.T) {
 	runTest(t, getFtpClient(), func(t *testing.T, ftpClient ConnectionAndSessionInstance) error {
 		if connectionIsAlive := ftpClient.IsAlive(); !connectionIsAlive {
@@ -91,3 +85,4 @@ func Test_FTP_Client_Download_File(t *testing.T) {
 		return nil
 	})
 }
+*/

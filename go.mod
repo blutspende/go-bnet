@@ -12,6 +12,7 @@ require (
 require (
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/stretchr/objx v0.4.0 // indirect
 )
 
 require (

@@ -1,12 +1,6 @@
 package bloodlabnet
 
-import (
-	"testing"
-	"time"
-
-	"github.com/stretchr/testify/assert"
-)
-
+/*
 func getTimingConfigurations() TimingConfiguration {
 	var DefaultFTPClientSettings = TimingConfiguration{
 		Timeout:             time.Second * 3,
@@ -99,3 +93,4 @@ func runTest(t *testing.T, ftpClient ConnectionAndSessionInstance, tr testRunner
 	dcErr := ftpClient.Close()
 	assert.Nil(t, dcErr)
 }
+*/
