@@ -3,6 +3,7 @@ package bloodlabnet
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net"
@@ -205,6 +206,10 @@ func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 
 		data, err := session.lowLevelProtocol.Receive(session.conn)
 		if err != nil {
+			if err == io.EOF {
+				// EOF is not an error, its a disconnect in TCP-terms: clean exit
+				break
+			}
 			session.handler.Error(session, ErrorReceive, err)
 			session.isRunning = false
 		} else {

@@ -16,6 +16,7 @@ By default, the values are <VT> for <SB> and <FS> for <EB>
 package protocol
 
 import (
+	"fmt"
 	"io"
 	"net"
 )
@@ -28,7 +29,7 @@ type MLLPProtocolSettings struct {
 
 type mllp struct {
 	settings               *MLLPProtocolSettings
-	receiveQ               chan []byte
+	receiveQ               chan protocolMessage
 	receiveThreadIsRunning bool
 }
 
@@ -61,7 +62,7 @@ func MLLP(settings ...*MLLPProtocolSettings) Implementation {
 
 	return &mllp{
 		settings:               thesettings,
-		receiveQ:               make(chan []byte, 1024),
+		receiveQ:               make(chan protocolMessage, 1024),
 		receiveThreadIsRunning: false,
 	}
 }
@@ -70,7 +71,19 @@ func (proto *mllp) Receive(conn net.Conn) ([]byte, error) {
 
 	proto.ensureReceiveThreadRunning(conn)
 
-	return <-proto.receiveQ, nil
+	// TODO Timeout
+	message := <-proto.receiveQ
+
+	switch message.Status {
+	case DATA:
+		return message.Data, nil
+	case EOF:
+		return []byte{}, io.EOF
+	case ERROR:
+		return []byte{}, fmt.Errorf("error while reading - abort receiving data: %s", string(message.Data))
+	default:
+		return []byte{}, fmt.Errorf("internal error: Invalid status of communication (%d) - abort", message.Status)
+	}
 }
 
 // asynchronous receiveloop
@@ -93,13 +106,36 @@ func (proto *mllp) ensureReceiveThreadRunning(conn net.Conn) {
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
 					continue // on timeout....
-				} else if opErr, ok := err.(*net.OpError); ok && opErr.Op == "read" && len(receivedMsg)+n == 0 {
+				} else if opErr, ok := err.(*net.OpError); ok && opErr.Op == "read" {
+
+					if len(receivedMsg)+n > 0 { // Process the remainder of the cache
+
+						for _, x := range tcpReceiveBuffer[:n] {
+							if x == STX {
+								receivedMsg = []byte{} // start of text obsoletes all prior
+								continue
+							}
+							if x == ETX {
+								messageDATA := protocolMessage{Status: DATA, Data: receivedMsg}
+								proto.receiveQ <- messageDATA
+								continue
+							}
+							receivedMsg = append(receivedMsg, x)
+						}
+					}
+
+					messageEOF := protocolMessage{Status: EOF}
+					proto.receiveQ <- messageEOF
 					proto.receiveThreadIsRunning = false
 					return
 				} else if err == io.EOF { // EOF = silent exit
+					messageEOF := protocolMessage{Status: EOF}
+					proto.receiveQ <- messageEOF
 					proto.receiveThreadIsRunning = false
 					return
 				}
+				messageERROR := protocolMessage{Status: ERROR, Data: []byte(err.Error())}
+				proto.receiveQ <- messageERROR
 				proto.receiveThreadIsRunning = false
 				return
 			}
@@ -110,7 +146,8 @@ func (proto *mllp) ensureReceiveThreadRunning(conn net.Conn) {
 					continue
 				}
 				if x == proto.settings.endByte {
-					proto.receiveQ <- receivedMsg
+					messageDATA := protocolMessage{Status: DATA, Data: receivedMsg}
+					proto.receiveQ <- messageDATA
 					continue
 				}
 				receivedMsg = append(receivedMsg, x)
