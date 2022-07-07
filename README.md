@@ -26,10 +26,8 @@ Create a client to send data.
    log.Panic(err)
  }
 
- // Sending Data
  n, err := tcpClient.Send([]byte("Hello TCP/IP"))
 
- // Receiving data
  receivedMsg, err := tcpClient.Receive()
 ```
 ### TCP/IP Server
@@ -59,11 +57,11 @@ func (s *MySessionData) DataReceived(session Session, fileData []byte, receiveTi
 func main() {
 
   server := CreateNewTCPServerInstance(4009,
-		protocol.STXETX(),  // use STX-ETX protocl
-		HAProxySendProxyV2,  // Deal with the header and ignore empty requests
+		protocol.STXETX(),
+		HAProxySendProxyV2,  
 		100) // Max Connections	 
   
-  go server.Run(MySessionData) // this starts the asynchroneous process 
+  go server.Run(MySessionData) 
   ...
 ```
 
