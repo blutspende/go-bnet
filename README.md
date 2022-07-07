@@ -59,10 +59,11 @@ func (s *MySessionHandler) Error(session bloodlabnet.Session, errorType bloodlab
 }
 
 func (s *MySessionHandler) DataReceived(session bloodlabnet.Session, data []byte, receiveTimestamp time.Time) {
-	rad, _ := session.RemoteAddress()
+	
+  rad, _ := session.RemoteAddress()
 	fmt.Println("From %s received : ", rad, string(data))
-
-	session.Send([]byte(fmt.Sprintf("You are sending from %s", rad)))
+	
+  session.Send([]byte(fmt.Sprintf("You are sending from %s", rad)))
 }
 
 func main() {
