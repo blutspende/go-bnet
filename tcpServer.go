@@ -42,17 +42,17 @@ func CreateNewTCPServerInstance(listeningPort int, protocolReceiveve protocol.Im
 	}
 }
 
-func (s *tcpServerInstance) Stop() {
-	s.isRunning = false
-	s.listener.Close()
-	s.mainLoopActive.Wait()
+func (instance *tcpServerInstance) Stop() {
+	instance.isRunning = false
+	instance.listener.Close()
+	instance.mainLoopActive.Wait()
 }
 
-func (s *tcpServerInstance) Send(data []byte) (int, error) {
+func (instance *tcpServerInstance) Send(data []byte) (int, error) {
 	return 0, errors.New("server instance can not send data. What are you looking for, a broadcast to all clients that are connected ? ")
 }
 
-func (s *tcpServerInstance) Receive() ([]byte, error) {
+func (instance *tcpServerInstance) Receive() ([]byte, error) {
 	return nil, errors.New("TCP server can't receive messages. Hint: Use another method")
 }
 
@@ -198,11 +198,11 @@ func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 		}
 
 		data, err := session.lowLevelProtocol.Receive(session.conn)
-
 		if err != nil {
 			session.handler.Error(session, ErrorReceive, err)
+			session.isRunning = false
 		} else {
-			// Imporant detail : the read loop is over when DataReceived event occurs. This means
+			// Important detail : the read loop is over when DataReceived event occurs. This means
 			// that at this point we can also send data
 			session.handler.DataReceived(session, data, time.Now())
 		}
@@ -212,15 +212,15 @@ func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 	return nil
 }
 
-func (s *tcpServerSession) IsAlive() bool {
-	return s.isRunning
+func (session *tcpServerSession) IsAlive() bool {
+	return session.isRunning
 }
 
-func (s *tcpServerSession) Send(data []byte) (int, error) {
-	return s.lowLevelProtocol.Send(s.conn, data)
+func (session *tcpServerSession) Send(data []byte) (int, error) {
+	return session.lowLevelProtocol.Send(session.conn, data)
 }
 
-func (s *tcpServerSession) Receive() ([]byte, error) {
+func (session *tcpServerSession) Receive() ([]byte, error) {
 	return []byte{}, errors.New("you can not receive messages directly, use the event-handler instead")
 }
 

@@ -1,3 +1,8 @@
+# [0.2.1]  - 2022-07-07
+
+### Fixed
+ -  Endless loop in TCP Sever connection 
+
 # [0.2.0]  - 2022-07-07
  - fix: STX-ETX can now continously receive data
  - change: removed timeouts for STX-ETX
