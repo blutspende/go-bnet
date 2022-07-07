@@ -378,6 +378,7 @@ func TestSTXETXBufferOverflowProtocol(t *testing.T) {
 //----------------------------------------------------------------------------------------
 // LIS1A1 Protocol
 //----------------------------------------------------------------------------------------
+/*
 type Comm struct {
 	Receive bool
 	Data    []byte
@@ -496,6 +497,48 @@ func TestLis1A1Protocol(t *testing.T) {
 				t.Error(fmt.Sprint("Invalid response. Expected:", rec.Data, "(", string(rec.Data), ") but got ", data, "(", string(data), ")"))
 			}
 		}
+	}
+
+	tcpServer.Stop()
+}
+*/
+
+// TestDropConnectionsAfterError
+// Limit connectios to 2, use them, close them -> expect them to be free-ed after close
+func TestDropConnectionsAfterError(t *testing.T) {
+	tcpServer := CreateNewTCPServerInstance(4013,
+		protocol.STXETX(),
+		NoLoadBalancer,
+		2 /* MAX Connection */)
+
+	var handler genericRecordingHandler
+	handler.receiveQ = make(chan []byte, 10)
+
+	go tcpServer.Run(&handler)
+
+	conn, err := net.Dial("tcp", "127.0.0.1:4013")
+	assert.Nil(t, err)
+	assert.NotNil(t, conn)
+	conn.Close()
+
+	conn2, err := net.Dial("tcp", "127.0.0.1:4013")
+	assert.Nil(t, err)
+	assert.NotNil(t, conn2)
+	conn2.Close()
+
+	clientConn, err := net.Dial("tcp", "127.0.0.1:4013")
+	assert.Nil(t, err)
+	assert.NotNil(t, clientConn)
+
+	_, err = clientConn.Write([]byte("\u0002Test connection\u0003"))
+	assert.Nil(t, err)
+
+	select {
+	case receivedMsg := <-handler.receiveQ:
+		assert.NotNil(t, receivedMsg, "Received a valid response")
+		assert.Equal(t, "Test connection", string(receivedMsg))
+	case <-time.After(2 * time.Second):
+		t.Fatalf("Timout waiting on valid response. This means the Server was unable to receive this message ")
 	}
 
 	tcpServer.Stop()

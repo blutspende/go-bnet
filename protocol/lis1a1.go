@@ -126,7 +126,7 @@ func finishTransmission(state *ProcessState, rule FSM, token []byte, filebuffer 
 }
 
 // asynchronous receiveloop
-func (proto *lis1A1) ensureReceiveThreadRunnfiring(conn net.Conn) {
+func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 
 	if proto.receiveThreadIsRunning {
 		return
