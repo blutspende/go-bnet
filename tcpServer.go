@@ -59,12 +59,16 @@ func (b BufferedConn) FirstByteOrError(howLong time.Duration) error {
 	if howLong > 0 {
 		b.Conn.SetReadDeadline(time.Now().Add(howLong))
 	}
-	_, err := b.Peek(1)
+	data, err := b.Peek(1)
 
 	if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
+		fmt.Println("First connection byte (timeout):", data)
 		return io.EOF // first byte not received in desired time = disconnect
 	} else if opErr, ok := err.(*net.OpError); ok && opErr.Op == "read" {
+		fmt.Println("First connection byte (eof):", data)
 		return io.EOF
+	} else {
+		fmt.Println("First connection byte (sthelse):", data, err)
 	}
 
 	return nil
