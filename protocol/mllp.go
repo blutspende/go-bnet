@@ -17,6 +17,7 @@ package protocol
 
 import (
 	"fmt"
+	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 	"io"
 	"net"
 )
@@ -36,9 +37,9 @@ type mllp struct {
 
 func DefaultMLLPProtocolSettings() *MLLPProtocolSettings {
 	return &MLLPProtocolSettings{
-		startByte:     VT,
-		endByte:       FS,
-		lineBreakByte: CR,
+		startByte:     utilities.VT,
+		endByte:       utilities.FS,
+		lineBreakByte: utilities.CR,
 	}
 }
 
@@ -114,11 +115,11 @@ func (proto *mllp) ensureReceiveThreadRunning(conn net.Conn) {
 					if len(receivedMsg)+n > 0 { // Process the remainder of the cache
 
 						for _, x := range tcpReceiveBuffer[:n] {
-							if x == STX {
+							if x == utilities.STX {
 								receivedMsg = []byte{} // start of text obsoletes all prior
 								continue
 							}
-							if x == ETX {
+							if x == utilities.ETX {
 								messageDATA := protocolMessage{Status: DATA, Data: receivedMsg}
 								proto.receiveQ <- messageDATA
 								continue

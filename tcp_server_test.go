@@ -2,6 +2,7 @@ package bloodlabnet
 
 import (
 	"fmt"
+	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 	"log"
 	"os"
 	"testing"
@@ -363,134 +364,6 @@ func TestSTXETXBufferOverflowProtocol(t *testing.T) {
 	tcpServer.Stop()
 }
 
-//----------------------------------------------------------------------------------------
-// LIS1A1 Protocol
-//----------------------------------------------------------------------------------------
-/*
-type Comm struct {
-	Receive bool
-	Data    []byte
-}
-
-func TestLis1A1Protocol(t *testing.T) {
-
-	tcpServer := CreateNewTCPServerInstance(4011,
-		protocol.Lis1A1Protocol(),
-		NoLoadBalancer,
-		100,
-		DefaultTCPServerSettings)
-
-	fmt.Println("Server running ? ")
-
-	var handler genericRecordingHandler
-	handler.receiveQ = make(chan []byte, 500)
-	go tcpServer.Run(&handler)
-
-	fmt.Println("Run client")
-	clientConn, err := net.Dial("tcp", "127.0.0.1:4011")
-	if err != nil {
-		log.Fatalf("Failed to dial (this is not an error, rather a problem of the unit test itself) : %s", err)
-	}
-
-	communicationFlow := []Comm{
-		{Data: []byte{protocol.ENQ}, Receive: false},
-		{Data: []byte{protocol.ACK}, Receive: true},
-		{Data: []byte{protocol.STX}, Receive: false},
-		{Data: []byte("1H|\\^&|||"), Receive: false},
-		{Data: []byte{protocol.CR}, Receive: false},
-		{Data: []byte{protocol.ETX}, Receive: false},
-		{Data: []byte{'5', '9'}, Receive: false},
-		{Data: []byte{protocol.CR, protocol.LF}, Receive: false},
-		{Data: []byte{protocol.ACK}, Receive: true},
-
-		{Data: []byte{protocol.STX}, Receive: false},
-		{Data: []byte("2P|1||777025164810"), Receive: false},
-		{Data: []byte{protocol.CR}, Receive: false},
-		{Data: []byte{protocol.ETX}, Receive: false},
-		{Data: []byte{'A', '7'}, Receive: false},
-		{Data: []byte{protocol.CR, protocol.LF}, Receive: false},
-		{Data: []byte{protocol.ACK}, Receive: true},
-
-		{Data: []byte{protocol.STX}, Receive: false},
-		{Data: []byte("3O|1|||^^^SARSCOV2IGG||20200811095913"), Receive: false},
-		{Data: []byte{protocol.CR}, Receive: false},
-		{Data: []byte{protocol.ETX}, Receive: false},
-		{Data: []byte{'B', '8'}, Receive: false},
-		{Data: []byte{protocol.CR, protocol.LF}, Receive: false},
-		{Data: []byte{protocol.ACK}, Receive: true},
-
-		{Data: []byte{protocol.STX}, Receive: false},
-		{Data: []byte("4R|1|^^^SARSCOV2IGG|0,18|Ratio|"), Receive: false},
-		{Data: []byte{protocol.CR}, Receive: false},
-		{Data: []byte{protocol.ETX}, Receive: false},
-		{Data: []byte{'3', 'B'}, Receive: false},
-		{Data: []byte{protocol.CR, protocol.LF}, Receive: false},
-		{Data: []byte{protocol.ACK}, Receive: true},
-
-		{Data: []byte{protocol.STX}, Receive: false},
-		{Data: []byte("5P|2||777642348910"), Receive: false},
-		{Data: []byte{protocol.CR}, Receive: false},
-		{Data: []byte{protocol.ETX}, Receive: false},
-		{Data: []byte{'B', '5'}, Receive: false},
-		{Data: []byte{protocol.CR, protocol.LF}, Receive: false},
-		{Data: []byte{protocol.ACK}, Receive: true},
-
-		{Data: []byte{protocol.STX}, Receive: false},
-		{Data: []byte("6O|1|||^^^SARSCOV2IGG||20200811095913"), Receive: false},
-		{Data: []byte{protocol.CR}, Receive: false},
-		{Data: []byte{protocol.ETX}, Receive: false},
-		{Data: []byte{'B', 'B'}, Receive: false},
-		{Data: []byte{protocol.CR, protocol.LF}, Receive: false},
-		{Data: []byte{protocol.ACK}, Receive: true},
-
-		{Data: []byte{protocol.STX}, Receive: false},
-		{Data: []byte("7R|1|^^^SARSCOV2IGG|0,18|Ratio|"), Receive: false},
-		{Data: []byte{protocol.CR}, Receive: false},
-		{Data: []byte{protocol.ETX}, Receive: false},
-		{Data: []byte{'3', 'E'}, Receive: false},
-		{Data: []byte{protocol.CR, protocol.LF}, Receive: false},
-		{Data: []byte{protocol.ACK}, Receive: true},
-
-		{Data: []byte{protocol.STX}, Receive: false},
-		{Data: []byte("2L|1|N"), Receive: false},
-		{Data: []byte{protocol.CR}, Receive: false},
-		{Data: []byte{protocol.ETX}, Receive: false},
-		{Data: []byte{'0', '5'}, Receive: false},
-		{Data: []byte{protocol.CR, protocol.LF}, Receive: false},
-		{Data: []byte{protocol.EOT}, Receive: false},
-		{Data: []byte{protocol.ENQ}, Receive: false},
-	}
-
-	fmt.Println("Start running")
-
-	for _, rec := range communicationFlow {
-		if !rec.Receive {
-
-			clientConn.Write(rec.Data)
-
-		} else {
-
-			data := make([]byte, 500)
-			n, err := clientConn.Read(data)
-
-			assert.Nil(t, err)
-
-			if n == len(rec.Data) {
-				for i, s := range data {
-					if s != data[i] {
-						t.Error(fmt.Sprint("Invalid response. Expected:", rec.Data, "(", string(rec.Data), ") but got ", data, "(", string(data), ")"))
-					}
-				}
-			} else {
-				t.Error(fmt.Sprint("Invalid response. Expected:", rec.Data, "(", string(rec.Data), ") but got ", data, "(", string(data), ")"))
-			}
-		}
-	}
-
-	tcpServer.Stop()
-}
-*/
-
 // TestDropConnectionsAfterError
 // Limit connectios to 2, use them, close them -> expect them to be free-ed after close
 func TestDropConnectionsAfterError(t *testing.T) {
@@ -527,6 +400,132 @@ func TestDropConnectionsAfterError(t *testing.T) {
 		assert.Equal(t, "Test connection", string(receivedMsg))
 	case <-time.After(2 * time.Second):
 		t.Fatalf("Timout waiting on valid response. This means the Server was unable to receive this message ")
+	}
+
+	tcpServer.Stop()
+}
+
+//----------------------------------------------------------------------------------------
+// LIS1A1 Protocol
+//----------------------------------------------------------------------------------------
+
+type Comm struct {
+	Receive bool
+	Data    []byte
+}
+
+func TestLis1A1Protocol(t *testing.T) {
+
+	tcpServer := CreateNewTCPServerInstance(4011,
+		protocol.Lis1A1Protocol(protocol.DefaultLis1A1ProtocolSettings()),
+		NoLoadBalancer,
+		100,
+		DefaultTCPServerSettings)
+
+	fmt.Println("Server running ? ")
+
+	var handler genericRecordingHandler
+	handler.receiveQ = make(chan []byte, 500)
+	go tcpServer.Run(&handler)
+
+	fmt.Println("Run client")
+	clientConn, err := net.Dial("tcp", "127.0.0.1:4011")
+	if err != nil {
+		log.Fatalf("Failed to dial (this is not an error, rather a problem of the unit test itself) : %s", err)
+	}
+
+	communicationFlow := []Comm{
+		{Data: []byte{utilities.ENQ}, Receive: false},
+		{Data: []byte{utilities.ACK}, Receive: true},
+		{Data: []byte{utilities.STX}, Receive: false},
+		{Data: []byte("1H|\\^&|||"), Receive: false},
+		{Data: []byte{utilities.CR}, Receive: false},
+		{Data: []byte{utilities.ETX}, Receive: false},
+		{Data: []byte{'5', '9'}, Receive: false},
+		{Data: []byte{utilities.CR, utilities.LF}, Receive: false},
+		{Data: []byte{utilities.ACK}, Receive: true},
+
+		{Data: []byte{utilities.STX}, Receive: false},
+		{Data: []byte("2P|1||777025164810"), Receive: false},
+		{Data: []byte{utilities.CR}, Receive: false},
+		{Data: []byte{utilities.ETX}, Receive: false},
+		{Data: []byte{'A', '7'}, Receive: false},
+		{Data: []byte{utilities.CR, utilities.LF}, Receive: false},
+		{Data: []byte{utilities.ACK}, Receive: true},
+
+		{Data: []byte{utilities.STX}, Receive: false},
+		{Data: []byte("3O|1|||^^^SARSCOV2IGG||20200811095913"), Receive: false},
+		{Data: []byte{utilities.CR}, Receive: false},
+		{Data: []byte{utilities.ETX}, Receive: false},
+		{Data: []byte{'B', '8'}, Receive: false},
+		{Data: []byte{utilities.CR, utilities.LF}, Receive: false},
+		{Data: []byte{utilities.ACK}, Receive: true},
+
+		{Data: []byte{utilities.STX}, Receive: false},
+		{Data: []byte("4R|1|^^^SARSCOV2IGG|0,18|Ratio|"), Receive: false},
+		{Data: []byte{utilities.CR}, Receive: false},
+		{Data: []byte{utilities.ETX}, Receive: false},
+		{Data: []byte{'3', 'B'}, Receive: false},
+		{Data: []byte{utilities.CR, utilities.LF}, Receive: false},
+		{Data: []byte{utilities.ACK}, Receive: true},
+
+		{Data: []byte{utilities.STX}, Receive: false},
+		{Data: []byte("5P|2||777642348910"), Receive: false},
+		{Data: []byte{utilities.CR}, Receive: false},
+		{Data: []byte{utilities.ETX}, Receive: false},
+		{Data: []byte{'B', '5'}, Receive: false},
+		{Data: []byte{utilities.CR, utilities.LF}, Receive: false},
+		{Data: []byte{utilities.ACK}, Receive: true},
+
+		{Data: []byte{utilities.STX}, Receive: false},
+		{Data: []byte("6O|1|||^^^SARSCOV2IGG||20200811095913"), Receive: false},
+		{Data: []byte{utilities.CR}, Receive: false},
+		{Data: []byte{utilities.ETX}, Receive: false},
+		{Data: []byte{'B', 'B'}, Receive: false},
+		{Data: []byte{utilities.CR, utilities.LF}, Receive: false},
+		{Data: []byte{utilities.ACK}, Receive: true},
+
+		{Data: []byte{utilities.STX}, Receive: false},
+		{Data: []byte("7R|1|^^^SARSCOV2IGG|0,18|Ratio|"), Receive: false},
+		{Data: []byte{utilities.CR}, Receive: false},
+		{Data: []byte{utilities.ETX}, Receive: false},
+		{Data: []byte{'3', 'E'}, Receive: false},
+		{Data: []byte{utilities.CR, utilities.LF}, Receive: false},
+		{Data: []byte{utilities.ACK}, Receive: true},
+
+		{Data: []byte{utilities.STX}, Receive: false},
+		{Data: []byte("2L|1|N"), Receive: false},
+		{Data: []byte{utilities.CR}, Receive: false},
+		{Data: []byte{utilities.ETX}, Receive: false},
+		{Data: []byte{'0', '5'}, Receive: false},
+		{Data: []byte{utilities.CR, utilities.LF}, Receive: false},
+		{Data: []byte{utilities.EOT}, Receive: false},
+	}
+
+	fmt.Println("Start running")
+
+	for _, rec := range communicationFlow {
+		if !rec.Receive {
+
+			clientConn.Write(rec.Data)
+
+		} else {
+
+			data := make([]byte, 500)
+			n, err := clientConn.Read(data)
+
+			assert.Nil(t, err)
+
+			if n == len(rec.Data) {
+				for i, s := range data {
+					if s != data[i] {
+						t.Error(fmt.Sprint("Invalid response. Expected:", rec.Data, "(", string(rec.Data), ") but got ", data, "(", string(data), ")"))
+					}
+				}
+			} else {
+				t.Error(fmt.Sprint("Invalid response. Expected:", rec.Data, "(", string(rec.Data), ") but got ", data, "(", string(data), ")"))
+			}
+		}
 	}
 
 	tcpServer.Stop()

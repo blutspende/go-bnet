@@ -2,77 +2,96 @@ package protocol
 
 import (
 	"fmt"
+	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 	"io"
 	"net"
 )
 
 type Lis1A1ProtocolSettings struct {
+	expectFrameNumbers       bool
+	strictChecksumValidation bool
+}
+
+func (s Lis1A1ProtocolSettings) EnableStrictChecksum() Lis1A1ProtocolSettings {
+	s.strictChecksumValidation = true
+	return s
+}
+
+func (s Lis1A1ProtocolSettings) DisableStrictChecksum() Lis1A1ProtocolSettings {
+	s.strictChecksumValidation = false
+	return s
+}
+
+func (s Lis1A1ProtocolSettings) EnableFrameNumber() Lis1A1ProtocolSettings {
+	s.expectFrameNumbers = true
+	return s
+}
+
+func (s Lis1A1ProtocolSettings) DisableFrameNumber() Lis1A1ProtocolSettings {
+	s.expectFrameNumbers = false
+	return s
 }
 
 type ProcessState struct {
-	State        int
-	Lastmessage  string
-	LastChecksum string
-	Messagelog   []string
+	State           int
+	LastMessage     string
+	LastChecksum    string
+	MessageLog      []string
+	ProtocolMessage protocolMessage
 }
 
-type FSMConditionHandler func(state *ProcessState, rule FSM, scanbuffer []byte, filebuffer []byte, conn net.Conn) bool
+const (
+	LineReceived utilities.ActionCode = "LineReceived"
+	JustAck      utilities.ActionCode = "JustAck"
+)
 
-// FSM struct for FSM
-type FSM struct {
-	FromState int
-	Symbols   []byte
-	ToState   int
-	Handler   FSMConditionHandler
-	Scan      bool
-	Finish    bool
-}
+var Rules []utilities.Rule = []utilities.Rule{
+	{FromState: utilities.Init, Symbols: []byte{utilities.ENQ}, ToState: 1, Scan: false, ActionCode: JustAck},
+	{FromState: 1, Symbols: []byte{utilities.STX}, ToState: 2, Scan: false},
 
-var lis1a1protocol = []FSM{
-	{FromState: 0, Symbols: []byte{ENQ}, ToState: 1, Scan: false, Finish: false, Handler: justAck},
-	{FromState: 1, Symbols: []byte{STX}, ToState: 2, Scan: false, Finish: false, Handler: nil},
+	{FromState: 2, Symbols: []byte{utilities.ETB}, ToState: 5, Scan: false},
+	{FromState: 5, Symbols: []byte{utilities.STX}, ToState: 2, Scan: false},
 
-	{FromState: 2, Symbols: []byte{ETB}, ToState: 5, Scan: false, Finish: false, Handler: nil},
-	{FromState: 5, Symbols: []byte{STX}, ToState: 2, Scan: false, Finish: false, Handler: nil},
+	{FromState: 2, Symbols: utilities.PrintableChars8Bit, ToState: 2, Scan: true},
+	{FromState: 2, Symbols: []byte{utilities.CR}, ToState: 3, Scan: false, ActionCode: LineReceived},
+	{FromState: 3, Symbols: []byte{utilities.ETX}, ToState: 7, Scan: false},
+	{FromState: 3, Symbols: []byte{utilities.ETB}, ToState: utilities.Init, Scan: false},
 
-	{FromState: 2, Symbols: []byte{CR}, ToState: 3, Scan: false, Finish: false, Handler: nil},
-	{FromState: 3, Symbols: []byte{ETX}, ToState: 7, Scan: false, Finish: false, Handler: nil},
+	{FromState: 7, Symbols: []byte("01234567890ABCDEFabcdef"), ToState: 7, Scan: true},
+	{FromState: 7, Symbols: []byte{utilities.CR}, ToState: 9, Scan: false, ActionCode: utilities.CheckSum},
+	{FromState: 9, Symbols: []byte{utilities.LF}, ToState: 10, Scan: false, ActionCode: JustAck},
 
-	{FromState: 7, Symbols: []byte("01234567890ABCDEFabcdef"), ToState: 7, Scan: true, Finish: false, Handler: checksum},
-	{FromState: 7, Symbols: []byte{CR}, ToState: 9, Scan: false, Finish: false, Handler: processMessage},
-	{FromState: 9, Symbols: []byte{LF}, ToState: 10, Scan: false, Finish: false, Handler: nil},
-
-	{FromState: 10, Symbols: []byte{STX}, ToState: 2, Scan: false, Finish: false, Handler: nil},
-	{FromState: 10, Symbols: []byte{ETB}, ToState: 0, Scan: false, Finish: false, Handler: finishTransmission},
-	{FromState: 10, Symbols: []byte{EOT}, ToState: 0, Scan: false, Finish: false, Handler: finishTransmission},
-	// Any rule must  be last
-	{FromState: 2, Symbols: []byte{0x18}, ToState: 2, Scan: true, Finish: false, Handler: astmMessage},
+	{FromState: 10, Symbols: []byte{utilities.STX}, ToState: 2, Scan: false},
+	{FromState: 10, Symbols: []byte{utilities.ETB}, ToState: utilities.Init, Scan: false},
+	{FromState: 10, Symbols: []byte{utilities.EOT}, ToState: utilities.Init, Scan: false, ActionCode: utilities.Finish},
 }
 
 type lis1A1 struct {
 	settings               *Lis1A1ProtocolSettings
-	receiveQ               chan []byte
+	receiveQ               chan protocolMessage
 	receiveThreadIsRunning bool
 	state                  ProcessState
 }
 
 func DefaultLis1A1ProtocolSettings() *Lis1A1ProtocolSettings {
 	var settings Lis1A1ProtocolSettings
+	settings.expectFrameNumbers = true
+	settings.strictChecksumValidation = true
 	return &settings
 }
 
 func Lis1A1Protocol(settings ...*Lis1A1ProtocolSettings) Implementation {
 
-	var thesettings *Lis1A1ProtocolSettings
+	var theSettings *Lis1A1ProtocolSettings
 	if len(settings) >= 1 {
-		thesettings = settings[0]
+		theSettings = settings[0]
 	} else {
-		thesettings = DefaultLis1A1ProtocolSettings()
+		theSettings = DefaultLis1A1ProtocolSettings()
 	}
 
 	return &lis1A1{
-		settings:               thesettings,
-		receiveQ:               make(chan []byte, 1024),
+		settings:               theSettings,
+		receiveQ:               make(chan protocolMessage),
 		receiveThreadIsRunning: false,
 	}
 }
@@ -81,51 +100,40 @@ func (proto *lis1A1) Receive(conn net.Conn) ([]byte, error) {
 
 	proto.ensureReceiveThreadRunning(conn)
 
-	return <-proto.receiveQ, nil
+	message := <-proto.receiveQ
+
+	switch message.Status {
+	case DATA:
+		return message.Data, nil
+	case EOF:
+		return []byte{}, io.EOF
+	case ERROR:
+		return []byte{}, fmt.Errorf("error while reading - abort receiving data: %s", string(message.Data))
+	default:
+		return []byte{}, fmt.Errorf("internal error: Invalid status of communication (%d) - abort", message.Status)
+	}
 }
 
-func astmMessage(state *ProcessState, rule FSM, token []byte, filebuffer []byte, conn net.Conn) bool {
-	//state.Lastmessage = token
-
-	fmt.Println("ASTMMEssage:", string(token))
-	filebuffer = append(filebuffer, token...)
-	return true
-}
-
-func checksum(istate *ProcessState, rule FSM, token []byte, filebuffer []byte, conn net.Conn) bool {
-	//state.LastChecksum = token
-	return true
-}
-
-func justAck(state *ProcessState, rule FSM, token []byte, filebuffer []byte, conn net.Conn) bool {
-
-	conn.Write([]byte{ACK})
-
-	return true
-}
-
-func processMessage(state *ProcessState, rule FSM, token []byte, filebuffer []byte, conn net.Conn) bool {
-
-	conn.Write([]byte{ACK})
-
-	fmt.Println("RECOCNIG", string(token))
-	/*
-		if !h.validateChecksum(state.Lastmessage, state.LastChecksum) {
-			h.instrumentMessageService.AddInstrumentMessage(*instrument.IPAddress, repositories.INSTRUMENTERROR,
-				[]byte(fmt.Sprintf("Warning: Invalid checksm for Message, but will process anyhow. %s", token)), 0, instrument.ID)
+func (proto *lis1A1) transferMessageToHandler(messageLog [][]byte) {
+	// looks like message is successfully transferred
+	fullMsg := make([]byte, 0)
+	for _, messageLine := range messageLog {
+		if proto.settings.expectFrameNumbers && len(messageLine) > 0 {
+			fullMsg = append(fullMsg, []byte(messageLine[1:])...)
 		} else {
-			state.Messagelog = append(state.Messagelog, state.Lastmessage)
-		}*/
+			fullMsg = append(fullMsg, []byte(messageLine)...)
+		}
 
-	return true
+		fullMsg = append(fullMsg, utilities.CR)
+	}
+
+	proto.receiveQ <- protocolMessage{
+		Status: DATA,
+		Data:   fullMsg,
+	}
 }
 
-func finishTransmission(state *ProcessState, rule FSM, token []byte, filebuffer []byte, conn net.Conn) bool {
-	fmt.Println("finished:", string(token))
-	return true
-}
-
-// asynchronous receiveloop
+// asynchronous receive loop
 func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 
 	if proto.receiveThreadIsRunning {
@@ -136,16 +144,15 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 		proto.receiveThreadIsRunning = true
 
 		proto.state.State = 0 // initial state for FSM
-		scanbuffer := []byte{}
-		filebuffer := []byte{}
+		lastMessage := make([]byte, 0)
+		fileBuffer := make([][]byte, 0)
 
 		tcpReceiveBuffer := make([]byte, 4096)
 
+		// init automate
+		fsm := utilities.CreateFSM(Rules)
 		for {
-			fmt.Print("[", proto.state.State, "]")
-
 			n, err := conn.Read(tcpReceiveBuffer)
-
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
 					continue // on timeout....
@@ -161,32 +168,59 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 			}
 
 			for _, ascii := range tcpReceiveBuffer[:n] {
-
-				ruleapplied := false
-
-				for _, trans := range lis1a1protocol {
-					if trans.FromState == proto.state.State && containsSymbol(ascii, trans.Symbols) {
-						ruleapplied = true
-						//fmt.Println("[", trans.ToState, "]")
-						if trans.Scan {
-							scanbuffer = append(scanbuffer, ascii)
-							// fmt.Println(fmt.Sprintf("scanbuffer: %s", scanbuffer))
-						}
-						// fmt.Println(fmt.Sprintf("scanbuffer: %s (FromState %d ToState %d)", scanbuffer, trans.FromState, trans.ToState))
-						if trans.Handler != nil {
-							trans.Handler(&proto.state, trans, []byte{ascii}, filebuffer, conn)
-						}
-						if trans.ToState != trans.FromState {
-							scanbuffer = []byte{}
-							proto.state.State = trans.ToState
-						}
-						// fmt.Println(fmt.Sprintf("scanbuffer: %s", scanbuffer))
-						break
+				messageBuffer, action, err := fsm.Push(ascii)
+				if err != nil {
+					proto.receiveQ <- protocolMessage{
+						Status: ERROR,
+						Data:   []byte(err.Error()),
 					}
+					proto.receiveThreadIsRunning = false
+					return
 				}
+				switch action {
+				case utilities.Ok:
+				case utilities.Error:
+					// error
+					proto.receiveQ <- protocolMessage{
+						Status: ERROR,
+						Data:   []byte("Internal error"),
+					}
+					proto.receiveThreadIsRunning = false
+					return
 
-				if !ruleapplied {
-					fmt.Println("**** INVALID Character in input-stream: ", string(ascii), "(", ascii, ")")
+				case LineReceived:
+					// append Data
+					lastMessage = messageBuffer
+					fileBuffer = append(fileBuffer, lastMessage)
+					fsm.ResetBuffer()
+				case utilities.CheckSum:
+					currentChecksum := computeChecksum(string(lastMessage))
+					if string(currentChecksum) != string(messageBuffer) {
+						proto.receiveQ <- protocolMessage{
+							Status: ERROR,
+							Data:   []byte("Invalid Checksum"),
+						}
+						proto.receiveThreadIsRunning = false
+						return
+					}
+
+					lastMessage = make([]byte, 0)
+					fsm.ResetBuffer()
+				case utilities.Finish:
+					// send fileData
+					proto.transferMessageToHandler(fileBuffer)
+					proto.receiveThreadIsRunning = false
+					return
+				case JustAck:
+					conn.Write([]byte{utilities.ACK})
+
+				default:
+					proto.receiveQ <- protocolMessage{
+						Status: ERROR,
+						Data:   []byte("Invalid action code"),
+					}
+					proto.receiveThreadIsRunning = false
+					return
 				}
 			}
 		}
@@ -198,25 +232,13 @@ func (proto *lis1A1) Interrupt() {
 }
 
 func (proto *lis1A1) Send(conn net.Conn, data []byte) (int, error) {
-	sendbytes := make([]byte, len(data)+2)
-	sendbytes[0] = STX
+	sendBytes := make([]byte, len(data)+2)
+	sendBytes[0] = utilities.STX
 	for i := 0; i < len(data); i++ {
-		sendbytes[i+1] = data[i]
+		sendBytes[i+1] = data[i]
 	}
-	sendbytes[len(data)+1] = ETX
-	return conn.Write(sendbytes)
-}
-
-func containsSymbol(symbol byte, symbols []byte) bool {
-	for _, x := range symbols {
-		if x == 0x18 { // 0x18 = ANY
-			return true
-		}
-		if x == symbol {
-			return true
-		}
-	}
-	return false
+	sendBytes[len(data)+1] = utilities.ETX
+	return conn.Write(sendBytes)
 }
 
 // ComputeChecksum Helper to compute the ASTM-Checksum
@@ -226,9 +248,9 @@ func computeChecksum(record string) []byte {
 	for _, b := range []byte(record) {
 		sum = sum + int(b)
 	}
-	sum += int(CR)
-	sum += int(ETX)
+	sum += int(utilities.CR)
+	sum += int(utilities.ETX)
 	sum = sum % 256
 	//fmt.Println("Checksum:", fmt.Sprintf("hex:%x dec:%d", sum, sum))
-	return []byte(fmt.Sprintf("%02x", sum))
+	return []byte(fmt.Sprintf("%02X", sum))
 }
