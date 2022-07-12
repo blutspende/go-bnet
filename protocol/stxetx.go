@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"fmt"
+	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 	"io"
 	"net"
 )
@@ -83,11 +84,11 @@ func (proto *stxetx) ensureReceiveThreadRunning(conn net.Conn) {
 					if len(receivedMsg)+n > 0 { // Process the remainder of the cache
 
 						for _, x := range tcpReceiveBuffer[:n] {
-							if x == STX {
+							if x == utilities.STX {
 								receivedMsg = []byte{} // start of text obsoletes all prior
 								continue
 							}
-							if x == ETX {
+							if x == utilities.ETX {
 								messageDATA := protocolMessage{Status: DATA, Data: receivedMsg}
 								proto.receiveQ <- messageDATA
 								continue
@@ -122,11 +123,11 @@ func (proto *stxetx) ensureReceiveThreadRunning(conn net.Conn) {
 			}
 
 			for _, x := range tcpReceiveBuffer[:n] {
-				if x == STX {
+				if x == utilities.STX {
 					receivedMsg = []byte{} // start of text obsoletes all prior
 					continue
 				}
-				if x == ETX {
+				if x == utilities.ETX {
 					messageDATA := protocolMessage{Status: DATA, Data: receivedMsg}
 					proto.receiveQ <- messageDATA
 					continue
@@ -145,11 +146,11 @@ func (proto *stxetx) Send(conn net.Conn, data []byte) (int, error) {
 
 	if proto.connectionIsValid {
 		sendbytes := make([]byte, len(data)+2)
-		sendbytes[0] = STX
+		sendbytes[0] = utilities.STX
 		for i := 0; i < len(data); i++ {
 			sendbytes[i+1] = data[i]
 		}
-		sendbytes[len(data)+1] = ETX
+		sendbytes[len(data)+1] = utilities.ETX
 		return conn.Write(sendbytes)
 	}
 
