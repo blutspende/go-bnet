@@ -2,8 +2,8 @@ package utilities
 
 import (
 	"errors"
+	"fmt"
 )
-
 
 var (
 	InvalidCharacterError = errors.New("invalid character")
@@ -85,7 +85,7 @@ func (s *fsm) findMatchingRule(token byte) (Rule, error) {
 			return rule, nil
 		}
 	}
-	return Rule{}, InvalidCharacterError
+	return Rule{}, fmt.Errorf("%w : %s currentBuffer: %s", InvalidCharacterError, string(token), string(s.currentBuffer))
 }
 
 func (s *fsm) Init() {

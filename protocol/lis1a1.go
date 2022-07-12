@@ -181,10 +181,17 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 				case utilities.Ok:
 				case utilities.Error:
 					// error
-					proto.receiveQ <- protocolMessage{
+					protocolMsg := protocolMessage{
 						Status: ERROR,
 						Data:   []byte("Internal error"),
 					}
+
+					if err != nil {
+						protocolMsg.Data = []byte(err.Error())
+					}
+
+					proto.receiveQ <- protocolMsg
+
 					proto.receiveThreadIsRunning = false
 					return
 
@@ -251,6 +258,5 @@ func computeChecksum(record string) []byte {
 	sum += int(utilities.CR)
 	sum += int(utilities.ETX)
 	sum = sum % 256
-	//fmt.Println("Checksum:", fmt.Sprintf("hex:%x dec:%d", sum, sum))
 	return []byte(fmt.Sprintf("%02X", sum))
 }
