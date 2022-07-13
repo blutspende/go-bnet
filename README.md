@@ -98,7 +98,12 @@ Mesasge are embedded in <VT> (Ascii 11) and <FS> (Ascii 28) terminated with <CR>
 ```Transmission example
  .... <VT>Some data<FS><CR> This data here is ignored <VT>More data<FS><CR> ....
 ```
-
+For some vendors start/stop - bytes might be altered. In that case you can use DefaultMLLPProtocolSettings and use SetStartByte and SetStopByte to change them.
+```
+tcpServer := bloodlabnet.CreateNewTCPServerInstance(config.TCPListenerPort,
+  bloodlabnetProtocol.MLLP(bloodlabnetProtocol.DefaultMLLPProtocolSettings().SetStartByte(0)),
+  bloodlabnet.HAProxySendProxyV2, config.TCPServerMaxConnections)
+```
 #### Lis1A1 Protocol (TCP/Client + TCP/Server)
 Lis1A1 is a low level protocol for submitting data to laboratory instruments, typically via serial line.
 

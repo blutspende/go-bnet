@@ -3,6 +3,7 @@ package bloodlabnet
 import (
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"testing"
 	"time"
@@ -83,7 +84,9 @@ func TestClientConnectReceiveAndSendRaw(t *testing.T) {
 	assert.Nil(t, err)
 
 	const TESTSTRINGSEND = "Testdata that is beeing send"
-	n, err := tcpClient.Send([]byte(TESTSTRINGSEND))
+	testStringBytes := make([][]byte, 0)
+	testStringBytes = append(testStringBytes, []byte(TESTSTRINGSEND))
+	n, err := tcpClient.Send(testStringBytes)
 	if err != nil {
 		panic(err)
 	}
@@ -121,7 +124,9 @@ func TestClientProtocolSTXETX(t *testing.T) {
 
 	// Sending to instrument expecting STX and ETX added
 	TESTSTRING = "Not so important what we send here"
-	_, err = tcpClient.Send([]byte(TESTSTRING))
+	testStringByte := make([][]byte, 0)
+	testStringByte = append(testStringByte, []byte(TESTSTRING))
+	_, err = tcpClient.Send(testStringByte)
 	assert.Nil(t, err)
 	dataReceived := <-tcpMockServerReceiveQ
 	assert.Equal(t, "\u0002"+TESTSTRING+"\u0003", string(dataReceived))
@@ -211,4 +216,62 @@ func TestClientRun(t *testing.T) {
 
 	assert.False(t, eventLoopIsActive, "Eventloop did terminated")
 	assert.True(t, session.disconnectedEventOccured, "The event 'Disconnected' was triggered")
+}
+
+type lis1a1Handler struct {
+	receiveQ                    chan []byte
+	didReceiveDisconnectMessage bool
+	lastConnectedIp             string
+	lasterror                   error
+}
+
+func (s *lis1a1Handler) Connected(session Session) {
+	s.lastConnectedIp, s.lasterror = session.RemoteAddress()
+}
+
+func (s *lis1a1Handler) Disconnected(session Session) {
+	s.didReceiveDisconnectMessage = true
+}
+
+func (s *lis1a1Handler) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
+	fmt.Println("Eventhandler : ", string(fileData))
+	s.receiveQ <- fileData
+}
+
+func (s *lis1a1Handler) Error(session Session, errorType ErrorType, err error) {
+	log.Fatal("Fatal error:", err)
+}
+
+func TestLis1A1ProtocolClient(t *testing.T) {
+	tcpServer := CreateNewTCPServerInstance(4004, protocol.Lis1A1Protocol(protocol.DefaultLis1A1ProtocolSettings()),
+		NoLoadBalancer,
+		50,
+		DefaultTCPServerSettings,
+	)
+	var handler lis1a1Handler
+
+	go tcpServer.Run(&handler)
+
+	tcpClient := CreateNewTCPClient("127.0.0.1", 4004,
+		protocol.Lis1A1Protocol(protocol.DefaultLis1A1ProtocolSettings()),
+		NoLoadBalancer,
+		DefaultTCPServerSettings)
+
+	err := tcpClient.Connect()
+	assert.Nil(t, err)
+
+	frames := make([][]byte, 0)
+	frames = append(frames, []byte("H|\\^&|||"))
+	frames = append(frames, []byte("P|1||777025164810"))
+	frames = append(frames, []byte("O|1|||^^^SARSCOV2IGG||20200811095913"))
+	frames = append(frames, []byte("R|1|^^^SARSCOV2IGG|0,18|Ratio|"))
+	frames = append(frames, []byte("P|2||777642348910"))
+	frames = append(frames, []byte("O|1|||^^^SARSCOV2IGG||20200811095913"))
+	frames = append(frames, []byte("R|1|^^^SARSCOV2IGG|0,18|Ratio|"))
+	frames = append(frames, []byte("L|1|N"))
+
+	tcpClient.Send(frames)
+
+	tcpServer.Stop()
+	tcpClient.Stop()
 }

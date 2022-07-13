@@ -1,78 +1,132 @@
 package protocol
 
 import (
+	"errors"
 	"fmt"
+	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 	"io"
 	"net"
+	"regexp"
+	"strconv"
+	"time"
+)
+
+var (
+	ReceiverDoesNotRespond   = errors.New("receiver does not react on sent message")
+	ReceivedMessageIsInvalid = errors.New("received message is invalid")
 )
 
 type Lis1A1ProtocolSettings struct {
+	expectFrameNumbers       bool
+	strictChecksumValidation bool
+	sendTimeoutDuration      time.Duration
+	strictFrameOrder         bool
+}
+
+func (s Lis1A1ProtocolSettings) EnableStrictChecksum() Lis1A1ProtocolSettings {
+	s.strictChecksumValidation = true
+	return s
+}
+
+func (s Lis1A1ProtocolSettings) DisableStrictChecksum() Lis1A1ProtocolSettings {
+	s.strictChecksumValidation = false
+	return s
+}
+
+func (s Lis1A1ProtocolSettings) EnableFrameNumber() Lis1A1ProtocolSettings {
+	s.expectFrameNumbers = true
+	return s
+}
+
+func (s Lis1A1ProtocolSettings) DisableFrameNumber() Lis1A1ProtocolSettings {
+	s.expectFrameNumbers = false
+	return s
+}
+
+func (s Lis1A1ProtocolSettings) EnableStrictFrameOrder() Lis1A1ProtocolSettings {
+	s.strictFrameOrder = true
+	return s
+}
+
+func (s Lis1A1ProtocolSettings) DisableStrictFrameOrder() Lis1A1ProtocolSettings {
+	s.strictFrameOrder = false
+	return s
+}
+
+func (s Lis1A1ProtocolSettings) SetSendTimeOutDuration(timeout time.Duration) Lis1A1ProtocolSettings {
+	s.sendTimeoutDuration = timeout
+	return s
 }
 
 type ProcessState struct {
-	State        int
-	Lastmessage  string
-	LastChecksum string
-	Messagelog   []string
+	State              int
+	LastMessage        string
+	LastChecksum       string
+	MessageLog         []string
+	ProtocolMessage    protocolMessage
+	currentFrameNumber string
 }
 
-type FSMConditionHandler func(state *ProcessState, rule FSM, scanbuffer []byte, filebuffer []byte, conn net.Conn) bool
+const (
+	LineReceived utilities.ActionCode = "LineReceived"
+	JustAck      utilities.ActionCode = "JustAck"
+	FrameNumber  utilities.ActionCode = "FrameNumber"
+)
 
-// FSM struct for FSM
-type FSM struct {
-	FromState int
-	Symbols   []byte
-	ToState   int
-	Handler   FSMConditionHandler
-	Scan      bool
-	Finish    bool
-}
+var Rules []utilities.Rule = []utilities.Rule{
+	{FromState: utilities.Init, Symbols: []byte{utilities.EOT}, ToState: utilities.Init, Scan: false},
+	{FromState: utilities.Init, Symbols: []byte{utilities.ENQ}, ToState: 1, Scan: false, ActionCode: JustAck},
 
-var lis1a1protocol = []FSM{
-	{FromState: 0, Symbols: []byte{ENQ}, ToState: 1, Scan: false, Finish: false, Handler: justAck},
-	{FromState: 1, Symbols: []byte{STX}, ToState: 2, Scan: false, Finish: false, Handler: nil},
+	{FromState: 1, Symbols: []byte{utilities.STX}, ToState: 99, Scan: false},
 
-	{FromState: 2, Symbols: []byte{ETB}, ToState: 5, Scan: false, Finish: false, Handler: nil},
-	{FromState: 5, Symbols: []byte{STX}, ToState: 2, Scan: false, Finish: false, Handler: nil},
+	{FromState: 99, Symbols: []byte("01234567"), ToState: 100, Scan: true, ActionCode: FrameNumber},
+	{FromState: 99, Symbols: utilities.PrintableChars8Bit, ToState: 2, Scan: true, ActionCode: FrameNumber}, //  TODO: exclude 0...7
+	{FromState: 100, Symbols: utilities.PrintableChars8Bit, ToState: 2, Scan: true},
 
-	{FromState: 2, Symbols: []byte{CR}, ToState: 3, Scan: false, Finish: false, Handler: nil},
-	{FromState: 3, Symbols: []byte{ETX}, ToState: 7, Scan: false, Finish: false, Handler: nil},
+	{FromState: 2, Symbols: utilities.PrintableChars8Bit, ToState: 2, Scan: true},
+	{FromState: 2, Symbols: []byte{utilities.ETX}, ToState: 10, Scan: false, ActionCode: LineReceived},
+	{FromState: 2, Symbols: []byte{utilities.ETB}, ToState: 20, Scan: false, ActionCode: LineReceived},
 
-	{FromState: 7, Symbols: []byte("01234567890ABCDEFabcdef"), ToState: 7, Scan: true, Finish: false, Handler: checksum},
-	{FromState: 7, Symbols: []byte{CR}, ToState: 9, Scan: false, Finish: false, Handler: processMessage},
-	{FromState: 9, Symbols: []byte{LF}, ToState: 10, Scan: false, Finish: false, Handler: nil},
+	{FromState: 20, Symbols: []byte("0123456789ABCDEFabcdef"), ToState: 20, Scan: true},
+	{FromState: 20, Symbols: []byte{utilities.CR}, ToState: 21, Scan: false, ActionCode: utilities.CheckSum},
+	{FromState: 21, Symbols: []byte{utilities.LF}, ToState: 22, Scan: false, ActionCode: JustAck},
+	{FromState: 22, Symbols: []byte{utilities.STX}, ToState: 99, Scan: false},
 
-	{FromState: 10, Symbols: []byte{STX}, ToState: 2, Scan: false, Finish: false, Handler: nil},
-	{FromState: 10, Symbols: []byte{ETB}, ToState: 0, Scan: false, Finish: false, Handler: finishTransmission},
-	{FromState: 10, Symbols: []byte{EOT}, ToState: 0, Scan: false, Finish: false, Handler: finishTransmission},
-	// Any rule must  be last
-	{FromState: 2, Symbols: []byte{0x18}, ToState: 2, Scan: true, Finish: false, Handler: astmMessage},
+	{FromState: 10, Symbols: []byte("0123456789ABCDEFabcdef"), ToState: 10, Scan: true},
+	{FromState: 10, Symbols: []byte{utilities.CR}, ToState: 11, Scan: false, ActionCode: utilities.CheckSum},
+	{FromState: 11, Symbols: []byte{utilities.LF}, ToState: 12, Scan: false, ActionCode: JustAck},
+	{FromState: 12, Symbols: []byte{utilities.STX}, ToState: 99, Scan: false},
+	{FromState: 12, Symbols: []byte{utilities.EOT}, ToState: utilities.Init, Scan: false, ActionCode: utilities.Finish},
 }
 
 type lis1A1 struct {
 	settings               *Lis1A1ProtocolSettings
-	receiveQ               chan []byte
+	receiveQ               chan protocolMessage
 	receiveThreadIsRunning bool
 	state                  ProcessState
 }
 
 func DefaultLis1A1ProtocolSettings() *Lis1A1ProtocolSettings {
 	var settings Lis1A1ProtocolSettings
+	settings.expectFrameNumbers = true
+	settings.strictChecksumValidation = true
+	settings.sendTimeoutDuration = 30
+	settings.strictFrameOrder = false
 	return &settings
 }
 
 func Lis1A1Protocol(settings ...*Lis1A1ProtocolSettings) Implementation {
 
-	var thesettings *Lis1A1ProtocolSettings
+	var theSettings *Lis1A1ProtocolSettings
 	if len(settings) >= 1 {
-		thesettings = settings[0]
+		theSettings = settings[0]
 	} else {
-		thesettings = DefaultLis1A1ProtocolSettings()
+		theSettings = DefaultLis1A1ProtocolSettings()
 	}
 
 	return &lis1A1{
-		settings:               thesettings,
-		receiveQ:               make(chan []byte, 1024),
+		settings:               theSettings,
+		receiveQ:               make(chan protocolMessage),
 		receiveThreadIsRunning: false,
 	}
 }
@@ -81,51 +135,40 @@ func (proto *lis1A1) Receive(conn net.Conn) ([]byte, error) {
 
 	proto.ensureReceiveThreadRunning(conn)
 
-	return <-proto.receiveQ, nil
+	message := <-proto.receiveQ
+
+	switch message.Status {
+	case DATA:
+		return message.Data, nil
+	case EOF:
+		return []byte{}, io.EOF
+	case ERROR:
+		return []byte{}, fmt.Errorf("error while reading - abort receiving data: %s", string(message.Data))
+	default:
+		return []byte{}, fmt.Errorf("internal error: Invalid status of communication (%d) - abort", message.Status)
+	}
 }
 
-func astmMessage(state *ProcessState, rule FSM, token []byte, filebuffer []byte, conn net.Conn) bool {
-	//state.Lastmessage = token
-
-	fmt.Println("ASTMMEssage:", string(token))
-	filebuffer = append(filebuffer, token...)
-	return true
-}
-
-func checksum(istate *ProcessState, rule FSM, token []byte, filebuffer []byte, conn net.Conn) bool {
-	//state.LastChecksum = token
-	return true
-}
-
-func justAck(state *ProcessState, rule FSM, token []byte, filebuffer []byte, conn net.Conn) bool {
-
-	conn.Write([]byte{ACK})
-
-	return true
-}
-
-func processMessage(state *ProcessState, rule FSM, token []byte, filebuffer []byte, conn net.Conn) bool {
-
-	conn.Write([]byte{ACK})
-
-	fmt.Println("RECOCNIG", string(token))
-	/*
-		if !h.validateChecksum(state.Lastmessage, state.LastChecksum) {
-			h.instrumentMessageService.AddInstrumentMessage(*instrument.IPAddress, repositories.INSTRUMENTERROR,
-				[]byte(fmt.Sprintf("Warning: Invalid checksm for Message, but will process anyhow. %s", token)), 0, instrument.ID)
+func (proto *lis1A1) transferMessageToHandler(messageLog [][]byte) {
+	// looks like message is successfully transferred
+	fullMsg := make([]byte, 0)
+	for _, messageLine := range messageLog {
+		if proto.settings.expectFrameNumbers && len(messageLine) > 0 {
+			fullMsg = append(fullMsg, []byte(messageLine[1:])...)
 		} else {
-			state.Messagelog = append(state.Messagelog, state.Lastmessage)
-		}*/
+			fullMsg = append(fullMsg, []byte(messageLine)...)
+		}
 
-	return true
+		fullMsg = append(fullMsg, utilities.CR)
+	}
+
+	proto.receiveQ <- protocolMessage{
+		Status: DATA,
+		Data:   fullMsg,
+	}
 }
 
-func finishTransmission(state *ProcessState, rule FSM, token []byte, filebuffer []byte, conn net.Conn) bool {
-	fmt.Println("finished:", string(token))
-	return true
-}
-
-// asynchronous receiveloop
+// asynchronous receive loop
 func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 
 	if proto.receiveThreadIsRunning {
@@ -136,16 +179,16 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 		proto.receiveThreadIsRunning = true
 
 		proto.state.State = 0 // initial state for FSM
-		scanbuffer := []byte{}
-		filebuffer := []byte{}
+		lastMessage := make([]byte, 0)
+		fileBuffer := make([][]byte, 0)
 
 		tcpReceiveBuffer := make([]byte, 4096)
+		nextExpectedFrameNumber := 1
 
+		// init state machine
+		fsm := utilities.CreateFSM(Rules)
 		for {
-			fmt.Print("[", proto.state.State, "]")
-
 			n, err := conn.Read(tcpReceiveBuffer)
-
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
 					continue // on timeout....
@@ -161,32 +204,108 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 			}
 
 			for _, ascii := range tcpReceiveBuffer[:n] {
-
-				ruleapplied := false
-
-				for _, trans := range lis1a1protocol {
-					if trans.FromState == proto.state.State && containsSymbol(ascii, trans.Symbols) {
-						ruleapplied = true
-						//fmt.Println("[", trans.ToState, "]")
-						if trans.Scan {
-							scanbuffer = append(scanbuffer, ascii)
-							// fmt.Println(fmt.Sprintf("scanbuffer: %s", scanbuffer))
-						}
-						// fmt.Println(fmt.Sprintf("scanbuffer: %s (FromState %d ToState %d)", scanbuffer, trans.FromState, trans.ToState))
-						if trans.Handler != nil {
-							trans.Handler(&proto.state, trans, []byte{ascii}, filebuffer, conn)
-						}
-						if trans.ToState != trans.FromState {
-							scanbuffer = []byte{}
-							proto.state.State = trans.ToState
-						}
-						// fmt.Println(fmt.Sprintf("scanbuffer: %s", scanbuffer))
-						break
+				messageBuffer, action, err := fsm.Push(ascii)
+				if err != nil {
+					proto.receiveQ <- protocolMessage{
+						Status: ERROR,
+						Data:   []byte(err.Error()),
 					}
+					proto.receiveThreadIsRunning = false
+					return
 				}
+				switch action {
+				case utilities.Ok:
+				case utilities.Error:
+					// error
+					protocolMsg := protocolMessage{
+						Status: ERROR,
+						Data:   []byte("Internal error"),
+					}
 
-				if !ruleapplied {
-					fmt.Println("**** INVALID Character in input-stream: ", string(ascii), "(", ascii, ")")
+					if err != nil {
+						protocolMsg.Data = []byte(err.Error())
+					}
+
+					_, err = conn.Write([]byte{utilities.NAK})
+					if err != nil {
+						protocolMsg.Data = append(protocolMsg.Data, []byte(err.Error())...)
+					}
+
+					proto.receiveQ <- protocolMsg
+					proto.receiveThreadIsRunning = false
+					return
+
+				case LineReceived:
+					// append Data
+					lastMessage = messageBuffer
+					fileBuffer = append(fileBuffer, lastMessage)
+					fsm.ResetBuffer()
+				case utilities.CheckSum:
+					currentChecksum := computeChecksum([]byte(proto.state.currentFrameNumber), lastMessage, []byte{utilities.ETX})
+					if string(currentChecksum) != string(messageBuffer) {
+						protocolMsg := protocolMessage{
+							Status: ERROR,
+							Data:   []byte(fmt.Sprintf("Invalid Checksum. want: %s given: %s ", string(currentChecksum), string(messageBuffer))),
+						}
+
+						_, err = conn.Write([]byte{utilities.NAK})
+						if err != nil {
+							protocolMsg.Data = append(protocolMsg.Data, []byte(err.Error())...)
+						}
+
+						proto.receiveQ <- protocolMsg
+						proto.receiveThreadIsRunning = false
+						return
+					}
+
+					lastMessage = make([]byte, 0)
+					fsm.ResetBuffer()
+				case utilities.Finish:
+					// send fileData
+					proto.transferMessageToHandler(fileBuffer)
+					proto.receiveThreadIsRunning = false
+					return
+				case JustAck:
+					conn.Write([]byte{utilities.ACK})
+				case FrameNumber:
+					if proto.settings.strictFrameOrder && string(ascii) != strconv.Itoa(nextExpectedFrameNumber) {
+						// Check valid frame number
+						protocolMsg := protocolMessage{
+							Status: ERROR,
+							Data:   []byte(fmt.Sprintf("invalid Frame number. currentFrameNumber: %s expectedFrameNumber: %s", string(ascii), strconv.Itoa(nextExpectedFrameNumber))),
+						}
+						_, err = conn.Write([]byte{utilities.NAK})
+						if err != nil {
+							protocolMsg.Data = append(protocolMsg.Data, []byte(err.Error())...)
+						}
+						proto.receiveQ <- protocolMsg
+						proto.receiveThreadIsRunning = false
+						return
+					}
+
+					matched, err := regexp.MatchString("[0-7]", string(ascii))
+					if err != nil {
+						println(fmt.Sprintf("Can not use search for number in incoming byte: %s", err.Error()))
+					}
+
+					if matched {
+						nextExpectedFrameNumber = (nextExpectedFrameNumber + 1) % 8
+						proto.state.currentFrameNumber = string(messageBuffer[0])
+						fsm.ResetBuffer()
+					}
+				default:
+					protocolMsg := protocolMessage{
+						Status: ERROR,
+						Data:   []byte("Invalid action code "),
+					}
+
+					_, err = conn.Write([]byte{utilities.NAK})
+					if err != nil {
+						protocolMsg.Data = append(protocolMsg.Data, []byte(err.Error())...)
+					}
+					proto.receiveQ <- protocolMsg
+					proto.receiveThreadIsRunning = false
+					return
 				}
 			}
 		}
@@ -197,38 +316,226 @@ func (proto *lis1A1) Interrupt() {
 	// not implemented (not required neither)
 }
 
-func (proto *lis1A1) Send(conn net.Conn, data []byte) (int, error) {
-	sendbytes := make([]byte, len(data)+2)
-	sendbytes[0] = STX
-	for i := 0; i < len(data); i++ {
-		sendbytes[i+1] = data[i]
+//  https://wiki.bloodlab.org/lib/exe/fetch.php?media=listnode:lis1-a.pdf
+func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int, error) {
+	if recursionDepth > 10 {
+		return -1, fmt.Errorf("the receiver does not accept any data")
 	}
-	sendbytes[len(data)+1] = ETX
-	return conn.Write(sendbytes)
+
+	_, err := conn.Write([]byte{utilities.ENQ}) // 8.2.4
+	if err != nil {
+		return -1, err
+	}
+
+	for {
+		err = conn.SetDeadline(time.Now().Add(time.Second * proto.settings.sendTimeoutDuration))
+		if err != nil {
+			return -1, ReceiverDoesNotRespond
+		}
+
+		receivingMsg := make([]byte, 1)
+		n, err := conn.Read(receivingMsg)
+		if err != nil {
+			return n, err
+		}
+
+		if n == 1 {
+			switch receivingMsg[0] {
+			case utilities.ACK: // 8.2.5
+				break // continue operation
+			case utilities.NAK: // 8.2.6
+				return -1, fmt.Errorf("instrument(lis1a1) did not accept any data")
+			case utilities.ENQ: // 8.2.7.1, 2
+				time.Sleep(time.Second)
+				return proto.send(conn, data, recursionDepth+1)
+			default:
+				continue // ignore all characters until ACK / 8.2.5
+			}
+		}
+
+		// 8.3 - Transfer Phase
+		maxLengthOfFrame := 63993
+		frameNumber := 1
+		bytesTransferred := 0
+		var checksum []byte
+		for _, frame := range data {
+			if len(frame) > maxLengthOfFrame {
+
+				iterations := len(frame) / maxLengthOfFrame
+				if (iterations * maxLengthOfFrame) < len(frame) {
+					iterations++
+				}
+
+				// take first 63993 bytes for each run
+				for i := 0; i < iterations; i++ {
+					copiedFrame := make([]byte, len(frame)+1)
+					copy(copiedFrame, []byte(strconv.Itoa(frameNumber)))
+					copy(copiedFrame[1:], frame)
+
+					subPartOfFrame := copiedFrame[iterations*maxLengthOfFrame:]
+					// If the last iteration of this frame send ETX
+					usedEndByte := []byte{utilities.ETB}
+					if i >= iterations {
+						usedEndByte = []byte{utilities.ETX}
+					}
+
+					checksum = computeChecksum([]byte{}, subPartOfFrame, usedEndByte) //  frameNumber is an empty []of bytes because it's already set to
+					_, err = conn.Write([]byte{utilities.STX})
+					if err != nil {
+						return -1, err
+					}
+
+					_, err = conn.Write(subPartOfFrame)
+					if err != nil {
+						return -1, err
+					}
+
+					_, err = conn.Write(usedEndByte)
+					if err != nil {
+						return -1, err
+					}
+					_, err = conn.Write(checksum)
+					if err != nil {
+						return -1, err
+					}
+
+					_, err = conn.Write([]byte{utilities.CR, utilities.LF})
+					if err != nil {
+						return -1, err
+					}
+
+					receivedMsg, err := proto.receiveSendAnswer(conn)
+					if err != nil {
+						return 0, err
+					}
+
+					switch receivedMsg {
+					case utilities.ACK:
+						// was successfully do next
+						bytesTransferred += len(subPartOfFrame)
+						bytesTransferred += len(checksum)
+						bytesTransferred += 3 // cr, lf stx and endByte
+					case utilities.NAK:
+						// Last was not successfully do next
+					case utilities.EOT:
+						// Cancel after that one
+						bytesTransferred += len(subPartOfFrame)
+						bytesTransferred += len(checksum)
+						bytesTransferred += 3 // cr, lf stx and endByte
+						return bytesTransferred, nil
+					default:
+						return 0, ReceivedMessageIsInvalid
+					}
+
+					frameNumber = updateFrameNumber(frameNumber)
+				}
+			} else {
+				checksum = computeChecksum([]byte{}, frame, []byte{utilities.ETX}) //  frameNumber is an empty [] of bytes because it's already set to
+				_, err = conn.Write([]byte{utilities.STX})
+				if err != nil {
+					return -1, err
+				}
+
+				_, err = conn.Write(frame)
+				if err != nil {
+					return -1, err
+				}
+
+				_, err = conn.Write([]byte{utilities.ETX})
+				if err != nil {
+					return -1, err
+				}
+				_, err = conn.Write(checksum)
+				if err != nil {
+					return -1, err
+				}
+
+				_, err = conn.Write([]byte{utilities.CR, utilities.LF})
+				if err != nil {
+					return -1, err
+				}
+			}
+
+			receivedMsg, err := proto.receiveSendAnswer(conn)
+			if err != nil {
+				return 0, err
+			}
+
+			switch receivedMsg {
+			case utilities.ACK:
+				bytesTransferred += len(frame)
+				bytesTransferred += len(checksum)
+				bytesTransferred += 3 // cr, lf stx and endByte
+				continue              // was successfully do next
+			case utilities.NAK:
+				continue // Last was not successfully do next
+			case utilities.EOT:
+				bytesTransferred += len(frame)
+				bytesTransferred += len(checksum)
+				bytesTransferred += 3        // cr, lf stx and endByte
+				return bytesTransferred, nil // Cancel after that one
+			default:
+				return 0, ReceivedMessageIsInvalid
+			}
+			frameNumber = updateFrameNumber(frameNumber)
+		}
+		return bytesTransferred, nil
+	}
 }
 
-func containsSymbol(symbol byte, symbols []byte) bool {
-	for _, x := range symbols {
-		if x == 0x18 { // 0x18 = ANY
-			return true
-		}
-		if x == symbol {
-			return true
-		}
+func updateFrameNumber(frameNumber int) int {
+	if (frameNumber % 7) == 0 {
+		return 0
 	}
-	return false
+	frameNumber++
+	return frameNumber
+}
+
+func (proto *lis1A1) receiveSendAnswer(conn net.Conn) (byte, error) {
+	err := conn.SetDeadline(time.Now().Add(time.Second * proto.settings.sendTimeoutDuration))
+	if err != nil {
+		return 0, ReceiverDoesNotRespond
+	}
+
+	receivingMsg := make([]byte, 1)
+	_, err = conn.Read(receivingMsg)
+	if err != nil {
+		return 0, err
+	}
+
+	switch receivingMsg[0] {
+	case utilities.ACK:
+		// was successfully do next
+		return utilities.ACK, nil
+	case utilities.NAK:
+		// Last was not successfully do next
+		return utilities.NAK, nil
+	case utilities.EOT:
+		// Cancel after that one
+		return utilities.EOT, nil
+	default:
+		return 0, ReceivedMessageIsInvalid
+	}
+
+}
+
+func (proto *lis1A1) Send(conn net.Conn, data [][]byte) (int, error) {
+	return proto.send(conn, data, 1)
 }
 
 // ComputeChecksum Helper to compute the ASTM-Checksum
-func computeChecksum(record string) []byte {
+func computeChecksum(frameNumber, record, specialChars []byte) []byte {
 	sum := int(0)
-
-	for _, b := range []byte(record) {
-		sum = sum + int(b)
+	for _, b := range frameNumber {
+		sum += int(b)
 	}
-	sum += int(CR)
-	sum += int(ETX)
+	for _, b := range record {
+		sum += int(b)
+	}
+	for _, b := range specialChars {
+		sum += int(b)
+	}
+
 	sum = sum % 256
-	//fmt.Println("Checksum:", fmt.Sprintf("hex:%x dec:%d", sum, sum))
-	return []byte(fmt.Sprintf("%02x", sum))
+	return []byte(fmt.Sprintf("%02X", sum))
 }

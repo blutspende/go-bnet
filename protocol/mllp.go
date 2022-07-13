@@ -17,6 +17,7 @@ package protocol
 
 import (
 	"fmt"
+	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 	"io"
 	"net"
 )
@@ -36,9 +37,9 @@ type mllp struct {
 
 func DefaultMLLPProtocolSettings() *MLLPProtocolSettings {
 	return &MLLPProtocolSettings{
-		startByte:     VT,
-		endByte:       FS,
-		lineBreakByte: CR,
+		startByte:     utilities.VT,
+		endByte:       utilities.FS,
+		lineBreakByte: utilities.CR,
 	}
 }
 
@@ -114,11 +115,11 @@ func (proto *mllp) ensureReceiveThreadRunning(conn net.Conn) {
 					if len(receivedMsg)+n > 0 { // Process the remainder of the cache
 
 						for _, x := range tcpReceiveBuffer[:n] {
-							if x == STX {
+							if x == utilities.STX {
 								receivedMsg = []byte{} // start of text obsoletes all prior
 								continue
 							}
-							if x == ETX {
+							if x == utilities.ETX {
 								messageDATA := protocolMessage{Status: DATA, Data: receivedMsg}
 								proto.receiveQ <- messageDATA
 								continue
@@ -171,18 +172,23 @@ func (proto *mllp) Interrupt() {
 	// not implemented (not required neither)
 }
 
-func (proto *mllp) Send(conn net.Conn, data []byte) (int, error) {
+func (proto *mllp) Send(conn net.Conn, data [][]byte) (int, error) {
 
 	if proto.connectionIsValid {
 
-		sendbytes := make([]byte, len(data)+3)
-		sendbytes[0] = proto.settings.startByte
-		for i := 0; i < len(data); i++ {
-			sendbytes[i+1] = data[i]
+		msgBuff := make([]byte, 0)
+		for _, line := range data {
+			msgBuff = append(msgBuff, line...)
 		}
-		sendbytes[len(data)+1] = proto.settings.endByte
-		sendbytes[len(data)+2] = proto.settings.lineBreakByte
-		return conn.Write(sendbytes)
+
+		sendBytes := make([]byte, len(msgBuff)+3)
+		sendBytes[0] = proto.settings.startByte
+		for i := 0; i < len(msgBuff); i++ {
+			sendBytes[i+1] = msgBuff[i]
+		}
+		sendBytes[len(msgBuff)+1] = proto.settings.endByte
+		sendBytes[len(msgBuff)+2] = proto.settings.lineBreakByte
+		return conn.Write(sendBytes)
 	}
 
 	return 0, io.EOF
