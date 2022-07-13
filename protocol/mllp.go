@@ -32,7 +32,6 @@ type mllp struct {
 	settings               *MLLPProtocolSettings
 	receiveQ               chan protocolMessage
 	receiveThreadIsRunning bool
-	connectionIsValid      bool
 }
 
 func DefaultMLLPProtocolSettings() *MLLPProtocolSettings {
@@ -66,13 +65,11 @@ func MLLP(settings ...*MLLPProtocolSettings) Implementation {
 		settings:               thesettings,
 		receiveQ:               make(chan protocolMessage, 1024),
 		receiveThreadIsRunning: false,
-		connectionIsValid:      false,
 	}
 }
 
 func (proto *mllp) Receive(conn net.Conn) ([]byte, error) {
 
-	proto.connectionIsValid = true
 	proto.ensureReceiveThreadRunning(conn)
 
 	// TODO Timeout
@@ -128,15 +125,12 @@ func (proto *mllp) ensureReceiveThreadRunning(conn net.Conn) {
 						}
 					}
 
-					proto.connectionIsValid = false // invalid connections can not be written to anymore
-
 					messageEOF := protocolMessage{Status: EOF}
 					proto.receiveQ <- messageEOF
 					proto.receiveThreadIsRunning = false
 					return
 				} else if err == io.EOF { // EOF = silent exit
 
-					proto.connectionIsValid = false // invalid connections can not be written to anymore
 
 					messageEOF := protocolMessage{Status: EOF}
 					proto.receiveQ <- messageEOF
@@ -144,7 +138,6 @@ func (proto *mllp) ensureReceiveThreadRunning(conn net.Conn) {
 					return
 				}
 
-				proto.connectionIsValid = false // invalid connections can not be written to anymore
 
 				messageERROR := protocolMessage{Status: ERROR, Data: []byte(err.Error())}
 				proto.receiveQ <- messageERROR
@@ -174,22 +167,17 @@ func (proto *mllp) Interrupt() {
 
 func (proto *mllp) Send(conn net.Conn, data [][]byte) (int, error) {
 
-	if proto.connectionIsValid {
-
-		msgBuff := make([]byte, 0)
-		for _, line := range data {
-			msgBuff = append(msgBuff, line...)
-		}
-
-		sendBytes := make([]byte, len(msgBuff)+3)
-		sendBytes[0] = proto.settings.startByte
-		for i := 0; i < len(msgBuff); i++ {
-			sendBytes[i+1] = msgBuff[i]
-		}
-		sendBytes[len(msgBuff)+1] = proto.settings.endByte
-		sendBytes[len(msgBuff)+2] = proto.settings.lineBreakByte
-		return conn.Write(sendBytes)
+	msgBuff := make([]byte, 0)
+	for _, line := range data {
+		msgBuff = append(msgBuff, line...)
 	}
 
-	return 0, io.EOF
+	sendBytes := make([]byte, len(msgBuff)+3)
+	sendBytes[0] = proto.settings.startByte
+	for i := 0; i < len(msgBuff); i++ {
+		sendBytes[i+1] = msgBuff[i]
+	}
+	sendBytes[len(msgBuff)+1] = proto.settings.endByte
+	sendBytes[len(msgBuff)+2] = proto.settings.lineBreakByte
+	return conn.Write(sendBytes)
 }

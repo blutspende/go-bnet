@@ -14,7 +14,6 @@ type stxetx struct {
 	settings               *STXETXProtocolSettings
 	receiveQ               chan protocolMessage
 	receiveThreadIsRunning bool
-	connectionIsValid      bool
 }
 
 func DefaultSTXETXProtocolSettings() *STXETXProtocolSettings {
@@ -35,13 +34,11 @@ func STXETX(settings ...*STXETXProtocolSettings) Implementation {
 		settings:               thesettings,
 		receiveQ:               make(chan protocolMessage, 1024),
 		receiveThreadIsRunning: false,
-		connectionIsValid:      false,
 	}
 }
 
 func (proto *stxetx) Receive(conn net.Conn) ([]byte, error) {
 
-	proto.connectionIsValid = true
 	proto.ensureReceiveThreadRunning(conn)
 
 	// TODO Timeout
@@ -97,15 +94,11 @@ func (proto *stxetx) ensureReceiveThreadRunning(conn net.Conn) {
 						}
 					}
 
-					proto.connectionIsValid = false // invalid connections can not be written to anymore
-
 					messageEOF := protocolMessage{Status: EOF, Data: []byte{}}
 					proto.receiveQ <- messageEOF
 					proto.receiveThreadIsRunning = false
 					return
 				} else if err == io.EOF { // EOF = silent exit
-
-					proto.connectionIsValid = false // invalid connections can not be written to anymore
 
 					messageEOF := protocolMessage{Status: EOF}
 					proto.receiveQ <- messageEOF
@@ -113,8 +106,6 @@ func (proto *stxetx) ensureReceiveThreadRunning(conn net.Conn) {
 					proto.receiveThreadIsRunning = false
 					return
 				}
-
-				proto.connectionIsValid = false // invalid connections can not be written to anymore
 
 				messageERROR := protocolMessage{Status: ERROR, Data: []byte(err.Error())}
 				proto.receiveQ <- messageERROR
@@ -144,20 +135,16 @@ func (proto *stxetx) Interrupt() {
 
 func (proto *stxetx) Send(conn net.Conn, data [][]byte) (int, error) {
 
-	if proto.connectionIsValid {
-		msgBuff := make([]byte, 0)
-		for _, line := range data {
-			msgBuff = append(msgBuff, line...)
-		}
-
-		sendBytes := make([]byte, len(msgBuff)+2)
-		sendBytes[0] = utilities.STX
-		for i := 0; i < len(msgBuff); i++ {
-			sendBytes[i+1] = msgBuff[i]
-		}
-		sendBytes[len(msgBuff)+1] = utilities.ETX
-		return conn.Write(sendBytes)
+	msgBuff := make([]byte, 0)
+	for _, line := range data {
+		msgBuff = append(msgBuff, line...)
 	}
 
-	return 0, io.EOF
+	sendBytes := make([]byte, len(msgBuff)+2)
+	sendBytes[0] = utilities.STX
+	for i := 0; i < len(msgBuff); i++ {
+		sendBytes[i+1] = msgBuff[i]
+	}
+	sendBytes[len(msgBuff)+1] = utilities.ETX
+	return conn.Write(sendBytes)
 }
