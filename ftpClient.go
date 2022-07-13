@@ -60,10 +60,12 @@ func (c *ftpClientInstance) IsAlive() bool {
 	return c.isConnected
 }
 
-func (c *ftpClientInstance) Send(msg []byte) (int, error) {
-	reader := bytes.NewReader(msg)
-	if err := c.ftpClient.Stor(c.path, reader); err != nil {
-		return 0, err
+func (c *ftpClientInstance) Send(msg [][]byte) (int, error) {
+	for _, line := range msg {
+		reader := bytes.NewReader(line)
+		if err := c.ftpClient.Stor(c.path, reader); err != nil {
+			return 0, err
+		}
 	}
 
 	return 0, nil

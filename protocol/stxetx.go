@@ -142,13 +142,18 @@ func (proto *stxetx) Interrupt() {
 	// not implemented (not required neither)
 }
 
-func (proto *stxetx) Send(conn net.Conn, data []byte) (int, error) {
+func (proto *stxetx) Send(conn net.Conn, data [][]byte) (int, error) {
 
 	if proto.connectionIsValid {
-		sendbytes := make([]byte, len(data)+2)
+		msgBuff := make([]byte, 0)
+		for _, line := range data {
+			msgBuff = append(msgBuff, line...)
+		}
+
+		sendbytes := make([]byte, len(msgBuff)+2)
 		sendbytes[0] = utilities.STX
-		for i := 0; i < len(data); i++ {
-			sendbytes[i+1] = data[i]
+		for i := 0; i < len(msgBuff); i++ {
+			sendbytes[i+1] = msgBuff[i]
 		}
 		sendbytes[len(data)+1] = utilities.ETX
 		return conn.Write(sendbytes)

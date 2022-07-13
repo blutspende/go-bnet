@@ -6,7 +6,7 @@ import (
 
 type ConnectionInstance interface {
 	// Send  data directly from instance. This will not work if the instance
-	Send(data []byte) (int, error)
+	Send(data [][]byte) (int, error)
 	//Receive data directly from instance. This will not work if the instance handles many connections like TCP-Servers
 	Receive() ([]byte, error)
 	// Run - Main-Loop
@@ -19,7 +19,7 @@ type ConnectionInstance interface {
 
 type Session interface {
 	IsAlive() bool
-	Send(msg []byte) (int, error)
+	Send(msg [][]byte) (int, error)
 	Receive() ([]byte, error)
 	Close() error
 	WaitTermination() error

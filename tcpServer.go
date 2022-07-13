@@ -97,7 +97,7 @@ func (instance *tcpServerInstance) Stop() {
 	instance.mainLoopActive.Wait()
 }
 
-func (instance *tcpServerInstance) Send(data []byte) (int, error) {
+func (instance *tcpServerInstance) Send(data [][]byte) (int, error) {
 	return 0, errors.New("server instance can not send data. What are you looking for, a broadcast to all clients that are connected ? ")
 }
 
@@ -278,7 +278,7 @@ func (session *tcpServerSession) IsAlive() bool {
 	return session.isRunning
 }
 
-func (session *tcpServerSession) Send(data []byte) (int, error) {
+func (session *tcpServerSession) Send(data [][]byte) (int, error) {
 	return session.lowLevelProtocol.Send(session.conn, data)
 }
 

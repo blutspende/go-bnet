@@ -155,7 +155,7 @@ func (s *tcpClientConnectionAndSession) Receive() ([]byte, error) {
 	return s.lowLevelProtocol.Receive(s.conn)
 }
 
-func (s *tcpClientConnectionAndSession) Send(data []byte) (int, error) {
+func (s *tcpClientConnectionAndSession) Send(data [][]byte) (int, error) {
 
 	if err := s.ensureConnected(); err != nil {
 		return 0, err
@@ -166,7 +166,7 @@ func (s *tcpClientConnectionAndSession) Send(data []byte) (int, error) {
 
 func (s *tcpClientConnectionAndSession) ensureConnected() error {
 	if s.connected || s.isStopped {
-		fmt.Printf("Return due to connected:%t and stopped:%t conn is nil?:%t\n", s.connected, s.isStopped, s.conn == nil)
+		// fmt.Printf("Return due to connected:%t and stopped:%t conn is nil?:%t\n", s.connected, s.isStopped, s.conn == nil)
 		return nil
 	}
 

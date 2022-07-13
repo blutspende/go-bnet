@@ -109,9 +109,18 @@ func (proto *rawprotocol) Interrupt() {
 	// Not necessary for raw
 }
 
-func (proto *rawprotocol) Send(conn net.Conn, data []byte) (int, error) {
+func (proto *rawprotocol) Send(conn net.Conn, data [][]byte) (int, error) {
 	//proto.blockReceivingMainloop.Lock()
-	n, err := conn.Write(data)
+	var (
+		n   int
+		err error
+	)
+	for _, line := range data {
+		n, err = conn.Write(line)
+		if err != nil {
+			return n, err
+		}
+	}
 	//proto.blockReceivingMainloop.Unlock()
 	return n, err
 }

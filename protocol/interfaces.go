@@ -5,10 +5,10 @@ import "net"
 type Implementation interface {
 	Receive(conn net.Conn) ([]byte, error)
 	Interrupt()
-	Send(conn net.Conn, data []byte) (int, error)
+	Send(conn net.Conn, data [][]byte) (int, error)
 }
 
-// The internal Protocolmessage type helps to communicate within the protocol
+// The internal ProtocolMessage type helps to communicate within the protocol
 type protocolMessageType int
 
 const (

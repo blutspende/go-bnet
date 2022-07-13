@@ -33,7 +33,10 @@ func (s *testRawDataProtocolSession) Disconnected(session Session) {
 func (s *testRawDataProtocolSession) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
 	s.lastConnected, _ = session.RemoteAddress()
 	s.receiveQ <- fileData
-	session.Send([]byte("An adequate response"))
+
+	anResponse := make([][]byte, 0)
+	anResponse = append(anResponse, []byte("An adequate response"))
+	session.Send(anResponse)
 }
 
 func (s *testRawDataProtocolSession) Error(session Session, errorType ErrorType, err error) {
@@ -237,7 +240,10 @@ func (s *testSTXETXProtocolSession) DataReceived(session Session, fileData []byt
 	for i := 0; i < 80000; i++ {
 		largeDataPackage = largeDataPackage + "X"
 	}
-	session.Send([]byte(largeDataPackage))
+
+	largeData := make([][]byte, 0)
+	largeData = append(largeData, []byte(largeDataPackage))
+	session.Send(largeData)
 }
 
 func (s *testSTXETXProtocolSession) Error(session Session, errorType ErrorType, err error) {
@@ -318,7 +324,10 @@ func (s *genericRecordingHandler) DataReceived(session Session, fileData []byte,
 }
 
 func (s *genericRecordingHandler) Error(session Session, errorType ErrorType, err error) {
-	log.Fatal("Fatal error:", err)
+	if err != nil {
+		s.receiveQ <- []byte(err.Error())
+		log.Fatalf("Error: %s", err.Error())
+	}
 }
 
 func TestSTXETXBufferOverflowProtocol(t *testing.T) {
@@ -494,10 +503,10 @@ func TestLis1A1Protocol(t *testing.T) {
 		{Data: []byte{utilities.ACK}, Receive: true},
 
 		{Data: []byte{utilities.STX}, Receive: false},
-		{Data: []byte("2L|1|N"), Receive: false},
+		{Data: []byte("0L|1|N"), Receive: false},
 		{Data: []byte{utilities.CR}, Receive: false},
 		{Data: []byte{utilities.ETX}, Receive: false},
-		{Data: []byte{'0', '5'}, Receive: false},
+		{Data: []byte{'0', '3'}, Receive: false},
 		{Data: []byte{utilities.CR, utilities.LF}, Receive: false},
 		{Data: []byte{utilities.EOT}, Receive: false},
 	}
