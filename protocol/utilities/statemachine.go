@@ -85,7 +85,7 @@ func (s *fsm) findMatchingRule(token byte) (Rule, error) {
 			return rule, nil
 		}
 	}
-	return Rule{}, fmt.Errorf("%w : %s currentBuffer: %s", InvalidCharacterError, string(token), string(s.currentBuffer))
+	return Rule{}, fmt.Errorf(`%w : "%s" ascii: %q currentBuffer: "%s" , status of fsm: %d`, InvalidCharacterError, string(token), token, string(s.currentBuffer), s.currentState)
 }
 
 func (s *fsm) Init() {

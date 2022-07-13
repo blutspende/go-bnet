@@ -27,7 +27,9 @@ func (s *MySessionHandler) DataReceived(session bnet.Session, data []byte, recei
 	rad, _ := session.RemoteAddress()
 	fmt.Printf("From %s received '%s'", rad, string(data))
 
-	session.Send([]byte(fmt.Sprintf("You are sending from %s", rad)))
+	dataToSend := make([][]byte, 0)
+	dataToSend = append(dataToSend, []byte(fmt.Sprintf("You are sending from %s", rad)))
+	session.Send(dataToSend)
 }
 
 func main() {
