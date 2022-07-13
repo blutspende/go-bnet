@@ -153,12 +153,7 @@ func (proto *lis1A1) transferMessageToHandler(messageLog [][]byte) {
 	// looks like message is successfully transferred
 	fullMsg := make([]byte, 0)
 	for _, messageLine := range messageLog {
-		if proto.settings.expectFrameNumbers && len(messageLine) > 0 {
-			fullMsg = append(fullMsg, []byte(messageLine[1:])...)
-		} else {
-			fullMsg = append(fullMsg, []byte(messageLine)...)
-		}
-
+		fullMsg = append(fullMsg, []byte(messageLine)...)
 		fullMsg = append(fullMsg, utilities.CR)
 	}
 
