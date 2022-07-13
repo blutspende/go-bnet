@@ -27,11 +27,11 @@ func DefaultRawProtocolSettings() *RawProtocolSettings {
 	return &rp
 }
 
-/* Rawreceiver - no changes to incoming data
-   maxBuffersize - bytes to store (prevent buffer overflow with this)
-   readTimeout_ms required to enable the flush timeout
-   flushTimeout_ms >1 for a timeout when the receive buffer is beeing forwared, 0 to disable
-*/
+// Raw receiver - no changes to incoming data
+// maxBufferSize - bytes to store (prevent buffer overflow with this)
+// readTimeout_ms required to enable the flush timeout
+// flushTimeout_ms >1 for a timeout when the receive buffer is beeing forwared, 0 to disable
+
 func Raw(settings ...*RawProtocolSettings) Implementation {
 
 	var thesettings *RawProtocolSettings

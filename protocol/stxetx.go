@@ -150,13 +150,13 @@ func (proto *stxetx) Send(conn net.Conn, data [][]byte) (int, error) {
 			msgBuff = append(msgBuff, line...)
 		}
 
-		sendbytes := make([]byte, len(msgBuff)+2)
-		sendbytes[0] = utilities.STX
+		sendBytes := make([]byte, len(msgBuff)+2)
+		sendBytes[0] = utilities.STX
 		for i := 0; i < len(msgBuff); i++ {
-			sendbytes[i+1] = msgBuff[i]
+			sendBytes[i+1] = msgBuff[i]
 		}
-		sendbytes[len(data)+1] = utilities.ETX
-		return conn.Write(sendbytes)
+		sendBytes[len(msgBuff)+1] = utilities.ETX
+		return conn.Write(sendBytes)
 	}
 
 	return 0, io.EOF
