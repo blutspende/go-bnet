@@ -3,12 +3,13 @@ package protocol
 import (
 	"errors"
 	"fmt"
-	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 	"io"
 	"net"
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 )
 
 var (
@@ -235,26 +236,31 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 					lastMessage = messageBuffer
 					fileBuffer = append(fileBuffer, lastMessage)
 					fsm.ResetBuffer()
+
 				case utilities.CheckSum:
-					currentChecksum := computeChecksum([]byte(proto.state.currentFrameNumber), lastMessage, []byte{utilities.ETX})
-					if string(currentChecksum) != string(messageBuffer) {
-						protocolMsg := protocolMessage{
-							Status: ERROR,
-							Data:   []byte(fmt.Sprintf("Invalid Checksum. want: %s given: %s ", string(currentChecksum), string(messageBuffer))),
-						}
 
-						_, err = conn.Write([]byte{utilities.NAK})
-						if err != nil {
-							protocolMsg.Data = append(protocolMsg.Data, []byte(err.Error())...)
-						}
+					if proto.settings.strictChecksumValidation {
+						currentChecksum := computeChecksum([]byte(proto.state.currentFrameNumber), lastMessage, []byte{utilities.ETX})
 
-						proto.receiveQ <- protocolMsg
-						proto.receiveThreadIsRunning = false
-						return
+						if string(currentChecksum) != string(messageBuffer) {
+							protocolMsg := protocolMessage{
+								Status: ERROR,
+								Data:   []byte(fmt.Sprintf("Invalid Checksum. want: %s given: %s ", string(currentChecksum), string(messageBuffer))),
+							}
+
+							_, err = conn.Write([]byte{utilities.NAK})
+							if err != nil {
+								protocolMsg.Data = append(protocolMsg.Data, []byte(err.Error())...)
+							}
+
+							proto.receiveQ <- protocolMsg
+							proto.receiveThreadIsRunning = false
+							return
+						}
 					}
-
 					lastMessage = make([]byte, 0)
 					fsm.ResetBuffer()
+
 				case utilities.Finish:
 					// send fileData
 					proto.transferMessageToHandler(fileBuffer)
