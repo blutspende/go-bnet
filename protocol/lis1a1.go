@@ -23,39 +23,39 @@ type Lis1A1ProtocolSettings struct {
 	strictFrameOrder         bool
 }
 
-func (s Lis1A1ProtocolSettings) EnableStrictChecksum() Lis1A1ProtocolSettings {
+func (s Lis1A1ProtocolSettings) EnableStrictChecksum() *Lis1A1ProtocolSettings {
 	s.strictChecksumValidation = true
-	return s
+	return &s
 }
 
-func (s Lis1A1ProtocolSettings) DisableStrictChecksum() Lis1A1ProtocolSettings {
+func (s Lis1A1ProtocolSettings) DisableStrictChecksum() *Lis1A1ProtocolSettings {
 	s.strictChecksumValidation = false
-	return s
+	return &s
 }
 
-func (s Lis1A1ProtocolSettings) EnableFrameNumber() Lis1A1ProtocolSettings {
+func (s Lis1A1ProtocolSettings) EnableFrameNumber() *Lis1A1ProtocolSettings {
 	s.expectFrameNumbers = true
-	return s
+	return &s
 }
 
-func (s Lis1A1ProtocolSettings) DisableFrameNumber() Lis1A1ProtocolSettings {
+func (s Lis1A1ProtocolSettings) DisableFrameNumber() *Lis1A1ProtocolSettings {
 	s.expectFrameNumbers = false
-	return s
+	return &s
 }
 
-func (s Lis1A1ProtocolSettings) EnableStrictFrameOrder() Lis1A1ProtocolSettings {
+func (s Lis1A1ProtocolSettings) EnableStrictFrameOrder() *Lis1A1ProtocolSettings {
 	s.strictFrameOrder = true
-	return s
+	return &s
 }
 
-func (s Lis1A1ProtocolSettings) DisableStrictFrameOrder() Lis1A1ProtocolSettings {
+func (s Lis1A1ProtocolSettings) DisableStrictFrameOrder() *Lis1A1ProtocolSettings {
 	s.strictFrameOrder = false
-	return s
+	return &s
 }
 
-func (s Lis1A1ProtocolSettings) SetSendTimeOutDuration(timeout time.Duration) Lis1A1ProtocolSettings {
+func (s Lis1A1ProtocolSettings) SetSendTimeOutDuration(timeout time.Duration) *Lis1A1ProtocolSettings {
 	s.sendTimeoutDuration = timeout
-	return s
+	return &s
 }
 
 type ProcessState struct {
@@ -234,6 +234,7 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 					// append Data
 					lastMessage = messageBuffer
 					fileBuffer = append(fileBuffer, lastMessage)
+					println(string(lastMessage))
 					fsm.ResetBuffer()
 				case utilities.CheckSum:
 					currentChecksum := computeChecksum([]byte(proto.state.currentFrameNumber), lastMessage, []byte{utilities.ETX})
@@ -474,6 +475,8 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 			}
 			frameNumber = updateFrameNumber(frameNumber)
 		}
+
+		conn.Write([]byte{utilities.EOT})
 		return bytesTransferred, nil
 	}
 }
