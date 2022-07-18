@@ -235,7 +235,6 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 					// append Data
 					lastMessage = messageBuffer
 					fileBuffer = append(fileBuffer, lastMessage)
-					println(string(lastMessage))
 					fsm.ResetBuffer()
 
 				case utilities.CheckSum:
