@@ -1,18 +1,18 @@
-/**
-Implementation of the minimal Low Level Protocol.
+//
+//Implementation of the minimal Low Level Protocol.
+//
+//In order to introduce message orientation to a stream-oriented TCP/IP protocol, a
+//Minimal Low-Level Protocol (MLLP) was proposed. This subchapter contains a very
+//brief overview of MLLP. HL7 messages are enclosed by special characters to form a
+//block.
+//
+//The format is as follows:
+//<SB>dddd<EB><CR>
+//
+//The characters used for begin and end of the message is configurable
+//
+//By default, the values are <VT> for <SB> and <FS> for <EB>
 
-In order to introduce message orientation to a stream-oriented TCP/IP protocol, a
-Minimal Low-Level Protocol (MLLP) was proposed. This subchapter contains a very
-brief overview of MLLP. HL7 messages are enclosed by special characters to form a
-block.
-
-The format is as follows:
-<SB>dddd<EB><CR>
-
-The characters used for begin and end of the message is configurable
-
-By default, the values are <VT> for <SB> and <FS> for <EB>
-**/
 package protocol
 
 import (
@@ -131,13 +131,11 @@ func (proto *mllp) ensureReceiveThreadRunning(conn net.Conn) {
 					return
 				} else if err == io.EOF { // EOF = silent exit
 
-
 					messageEOF := protocolMessage{Status: EOF}
 					proto.receiveQ <- messageEOF
 					proto.receiveThreadIsRunning = false
 					return
 				}
-
 
 				messageERROR := protocolMessage{Status: ERROR, Data: []byte(err.Error())}
 				proto.receiveQ <- messageERROR
@@ -168,16 +166,12 @@ func (proto *mllp) Interrupt() {
 func (proto *mllp) Send(conn net.Conn, data [][]byte) (int, error) {
 
 	msgBuff := make([]byte, 0)
+	msgBuff = append(msgBuff, proto.settings.startByte)
 	for _, line := range data {
 		msgBuff = append(msgBuff, line...)
+		msgBuff = append(msgBuff, proto.settings.lineBreakByte)
 	}
+	msgBuff = append(msgBuff, proto.settings.endByte)
 
-	sendBytes := make([]byte, len(msgBuff)+3)
-	sendBytes[0] = proto.settings.startByte
-	for i := 0; i < len(msgBuff); i++ {
-		sendBytes[i+1] = msgBuff[i]
-	}
-	sendBytes[len(msgBuff)+1] = proto.settings.endByte
-	sendBytes[len(msgBuff)+2] = proto.settings.lineBreakByte
-	return conn.Write(sendBytes)
+	return conn.Write(msgBuff)
 }
