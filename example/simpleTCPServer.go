@@ -34,10 +34,10 @@ func (s *MySessionHandler) DataReceived(session bnet.Session, data []byte, recei
 
 func main() {
 
-	server := bnet.CreateNewTCPServerInstance(4009,
-		protocol.STXETX(),
+	server := bnet.CreateNewTCPServerInstance(4001,
+		protocol.Lis1A1Protocol(),
 		bnet.HAProxySendProxyV2,
-		2) // Max Connections
+		10) // Max Connections
 
 	server.Run(&MySessionHandler{})
 }

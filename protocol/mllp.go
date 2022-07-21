@@ -17,9 +17,10 @@ package protocol
 
 import (
 	"fmt"
-	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 	"io"
 	"net"
+
+	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 )
 
 type MLLPProtocolSettings struct {
@@ -63,6 +64,14 @@ func MLLP(settings ...*MLLPProtocolSettings) Implementation {
 
 	return &mllp{
 		settings:               thesettings,
+		receiveQ:               make(chan protocolMessage, 1024),
+		receiveThreadIsRunning: false,
+	}
+}
+
+func (proto *mllp) NewInstance() Implementation {
+	return &mllp{
+		settings:               proto.settings,
 		receiveQ:               make(chan protocolMessage, 1024),
 		receiveThreadIsRunning: false,
 	}
@@ -131,13 +140,11 @@ func (proto *mllp) ensureReceiveThreadRunning(conn net.Conn) {
 					return
 				} else if err == io.EOF { // EOF = silent exit
 
-
 					messageEOF := protocolMessage{Status: EOF}
 					proto.receiveQ <- messageEOF
 					proto.receiveThreadIsRunning = false
 					return
 				}
-
 
 				messageERROR := protocolMessage{Status: ERROR, Data: []byte(err.Error())}
 				proto.receiveQ <- messageERROR

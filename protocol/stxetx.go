@@ -2,9 +2,10 @@ package protocol
 
 import (
 	"fmt"
-	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 	"io"
 	"net"
+
+	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 )
 
 type STXETXProtocolSettings struct {
@@ -32,6 +33,14 @@ func STXETX(settings ...*STXETXProtocolSettings) Implementation {
 
 	return &stxetx{
 		settings:               thesettings,
+		receiveQ:               make(chan protocolMessage, 1024),
+		receiveThreadIsRunning: false,
+	}
+}
+
+func (proto *stxetx) NewInstance() Implementation {
+	return &stxetx{
+		settings:               proto.settings,
 		receiveQ:               make(chan protocolMessage, 1024),
 		receiveThreadIsRunning: false,
 	}
