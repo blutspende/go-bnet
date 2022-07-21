@@ -136,15 +136,12 @@ func (proto *stxetx) Interrupt() {
 func (proto *stxetx) Send(conn net.Conn, data [][]byte) (int, error) {
 
 	msgBuff := make([]byte, 0)
+	msgBuff = append(msgBuff, utilities.STX)
 	for _, line := range data {
 		msgBuff = append(msgBuff, line...)
+		msgBuff = append(msgBuff, utilities.CR)
 	}
+	msgBuff = append(msgBuff, utilities.ETX)
 
-	sendBytes := make([]byte, len(msgBuff)+2)
-	sendBytes[0] = utilities.STX
-	for i := 0; i < len(msgBuff); i++ {
-		sendBytes[i+1] = msgBuff[i]
-	}
-	sendBytes[len(msgBuff)+1] = utilities.ETX
-	return conn.Write(sendBytes)
+	return conn.Write(msgBuff)
 }
