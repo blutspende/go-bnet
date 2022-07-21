@@ -8,6 +8,7 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"reflect"
 	"sync"
 	"time"
 
@@ -89,6 +90,7 @@ func CreateNewTCPServerInstance(listeningPort int, protocolReceiveve protocol.Im
 		mainLoopActive:   &sync.WaitGroup{},
 		sessions:         make([]*tcpServerSession, 0),
 	}
+
 }
 
 func (instance *tcpServerInstance) Stop() {
@@ -140,7 +142,9 @@ func (instance *tcpServerInstance) Run(handler Handler) {
 			continue
 		}
 
-		session, err := createTcpServerSession(connection, handler, instance.LowLevelProtocol, instance.timingConfig)
+		reflect.New(reflect.TypeOf(instance.LowLevelProtocol))
+
+		session, err := createTcpServerSession(connection, handler, instance.LowLevelProtocol.NewInstance(), instance.timingConfig)
 		if err != nil {
 			instance.handler.Error(session, ErrorCreateSession, fmt.Errorf("error creating a new TCP session - %w", err))
 		} else {
@@ -249,11 +253,18 @@ func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 	for {
 
 		if !session.isRunning || !instance.isRunning {
+			fmt.Println("Exit tcp server in general (bad idea) !!!! ++++ ----")
 			break
 		}
 
 		data, err := session.lowLevelProtocol.Receive(session.conn)
+
 		if err != nil {
+
+			if err == protocol.Timeout {
+				continue // Timeout = keep retrying
+			}
+
 			if err == io.EOF {
 				// EOF is not an error, its a disconnect in TCP-terms: clean exit
 				session.handler.Disconnected(session)

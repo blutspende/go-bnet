@@ -76,6 +76,8 @@ const (
 
 var Rules []utilities.Rule = []utilities.Rule{
 	{FromState: utilities.Init, Symbols: []byte{utilities.EOT}, ToState: utilities.Init, Scan: false},
+	// everything except ENQ
+	{FromState: utilities.Init, Symbols: []byte{0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255}, ToState: utilities.Init, Scan: false},
 	{FromState: utilities.Init, Symbols: []byte{utilities.ENQ}, ToState: 1, Scan: false, ActionCode: JustAck},
 
 	{FromState: 1, Symbols: []byte{utilities.STX}, ToState: 99, Scan: false},
@@ -132,22 +134,39 @@ func Lis1A1Protocol(settings ...*Lis1A1ProtocolSettings) Implementation {
 	}
 }
 
+func (proto *lis1A1) NewInstance() Implementation {
+	return &lis1A1{
+		settings:               proto.settings,
+		receiveQ:               make(chan protocolMessage),
+		receiveThreadIsRunning: false,
+	}
+}
+
+var Timeout error = fmt.Errorf("Timeout")
+
 func (proto *lis1A1) Receive(conn net.Conn) ([]byte, error) {
 
 	proto.ensureReceiveThreadRunning(conn)
 
-	message := <-proto.receiveQ
-
-	switch message.Status {
-	case DATA:
-		return message.Data, nil
-	case EOF:
-		return []byte{}, io.EOF
-	case ERROR:
-		return []byte{}, fmt.Errorf("error while reading - abort receiving data: %s", string(message.Data))
-	default:
-		return []byte{}, fmt.Errorf("internal error: Invalid status of communication (%d) - abort", message.Status)
+	select {
+	case message := <-proto.receiveQ:
+		switch message.Status {
+		case DATA:
+			return message.Data, nil
+		case EOF:
+			return []byte{}, io.EOF
+		case DISCONNECT:
+			return []byte{}, io.EOF
+		case ERROR:
+			return []byte{}, fmt.Errorf("error while reading - abort receiving data: %s", string(message.Data))
+		default:
+			return []byte{}, fmt.Errorf("internal error: Invalid status of communication (%d) - abort", message.Status)
+		}
+	case <-time.After(60 * time.Second):
+		// return []byte{}, fmt.Errorf("internal error: Invalid status of communication (%d) - abort", message.Status)
+		return []byte{}, Timeout
 	}
+
 }
 
 func (proto *lis1A1) transferMessageToHandler(messageLog [][]byte) {
@@ -172,6 +191,7 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 	}
 
 	go func() {
+		fmt.Println("Start Receiving Thread")
 		proto.receiveThreadIsRunning = true
 
 		proto.state.State = 0 // initial state for FSM
@@ -184,16 +204,32 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 		// init state machine
 		fsm := utilities.CreateFSM(Rules)
 		for {
+			//TODO: NO timeout when in status Init
+			// conn.SetReadDeadline(time.Now().Add(time.Second * 15))
 			n, err := conn.Read(tcpReceiveBuffer)
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
+					fsm.Init()
 					continue // on timeout....
 				} else if opErr, ok := err.(*net.OpError); ok && opErr.Op == "read" {
 					proto.receiveThreadIsRunning = false
+					proto.receiveQ <- protocolMessage{
+						Status: DISCONNECT,
+						Data:   []byte(err.Error()),
+					}
 					return
 				} else if err == io.EOF { // EOF = silent exit
+					proto.receiveQ <- protocolMessage{
+						Status: DISCONNECT,
+						Data:   []byte(err.Error()),
+					}
 					proto.receiveThreadIsRunning = false
 					return
+				}
+
+				proto.receiveQ <- protocolMessage{
+					Status: DISCONNECT,
+					Data:   []byte(err.Error()),
 				}
 				proto.receiveThreadIsRunning = false
 				return
@@ -264,8 +300,12 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 				case utilities.Finish:
 					// send fileData
 					proto.transferMessageToHandler(fileBuffer)
-					proto.receiveThreadIsRunning = false
-					return
+
+					// fmt.Println("Exit handler !!!!!!!!!!!!!!!!!")
+					// TODO: reinitialize FSM would be sufficient
+					//proto.receiveThreadIsRunning = false
+					//return
+					fsm.Init()
 				case JustAck:
 					conn.Write([]byte{utilities.ACK})
 				case FrameNumber:
@@ -306,6 +346,7 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 					}
 					proto.receiveQ <- protocolMsg
 					proto.receiveThreadIsRunning = false
+					fmt.Println("Disconnect due to unexpected, unkown and unlikley error")
 					return
 				}
 			}

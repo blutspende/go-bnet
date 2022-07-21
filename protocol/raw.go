@@ -47,6 +47,13 @@ func Raw(settings ...*RawProtocolSettings) Implementation {
 	}
 }
 
+func (proto *rawprotocol) NewInstance() Implementation {
+	return &rawprotocol{
+		settings:               proto.settings,
+		blockReceivingMainloop: &sync.Mutex{},
+	}
+}
+
 func (proto *rawprotocol) Receive(conn net.Conn) ([]byte, error) {
 
 	tcpReceiveBuffer := make([]byte, 4096)
