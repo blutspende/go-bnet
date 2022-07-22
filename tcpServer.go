@@ -230,7 +230,6 @@ func createTcpServerSession(conn net.Conn, handler Handler,
 func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 
 	session.sessionActive.Add(1)
-
 	defer session.sessionActive.Done()
 
 	host, _, _ := net.SplitHostPort(session.conn.RemoteAddr().String())
@@ -244,7 +243,11 @@ func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 	}
 
 	defer session.Close()
-	session.handler.Connected(session)
+
+	if err := session.handler.Connected(session); err != nil {
+		// connection handler declined this session
+		return err
+	}
 
 	for {
 
