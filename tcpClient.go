@@ -19,7 +19,7 @@ type tcpClientConnectionAndSession struct {
 	port             int
 	lowLevelProtocol protocol.Implementation
 	proxy            ConnectionType
-	timingConfig     TCPServerConfiguration
+	timingConfig     TCPClientConfiguration
 	conn             net.Conn
 	connected        bool
 	isStopped        bool
@@ -28,10 +28,10 @@ type tcpClientConnectionAndSession struct {
 
 func CreateNewTCPClient(hostname string, port int,
 	lowLevelProtocol protocol.Implementation,
-	proxy ConnectionType, timing ...TCPServerConfiguration) ConnectionAndSessionInstance {
-	var thetiming TCPServerConfiguration
+	proxy ConnectionType, timing ...TCPClientConfiguration) ConnectionAndSessionInstance {
+	var thetiming TCPClientConfiguration
 	if len(timing) == 0 {
-		thetiming = DefaultTCPServerSettings
+		thetiming = DefaultTCPClientSettings
 	} else {
 		thetiming = timing[0]
 	}
@@ -170,7 +170,20 @@ func (s *tcpClientConnectionAndSession) ensureConnected() error {
 		return nil
 	}
 
-	conn, err := net.Dial("tcp", s.hostname+fmt.Sprintf(":%d", s.port))
+	dialer := &net.Dialer{}
+	if s.timingConfig.SourceIP != "" {
+		sourceIP, err := net.ResolveTCPAddr("tcp", s.timingConfig.SourceIP+":0")
+		if err != nil {
+			if s.handler != nil {
+				s.handler.Error(s, ErrorConnect, err)
+			}
+			return err
+		} else {
+			dialer.LocalAddr = sourceIP
+		}
+	}
+
+	conn, err := dialer.Dial("tcp", s.hostname+fmt.Sprintf(":%d", s.port))
 	if err != nil {
 		if s.handler != nil {
 			s.handler.Error(s, ErrorConnect, err)

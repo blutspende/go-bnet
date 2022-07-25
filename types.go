@@ -4,6 +4,31 @@ import (
 	"time"
 )
 
+type TCPClientConfiguration struct {
+	Timeout                 time.Duration
+	Deadline                time.Duration
+	FlushBufferTimoutMs     int
+	PollInterval            time.Duration
+	SessionAfterFirstByte   bool
+	SessionInitationTimeout time.Duration
+	SourceIP                string
+}
+
+func (s TCPClientConfiguration) SetSourceIP(sourceIP string) TCPClientConfiguration {
+	s.SourceIP = sourceIP
+	return s
+}
+
+var DefaultTCPClientSettings = TCPClientConfiguration{
+	Timeout:                 time.Second * 3,
+	Deadline:                time.Millisecond * 200,
+	FlushBufferTimoutMs:     500,
+	PollInterval:            time.Second * 60,
+	SessionAfterFirstByte:   true,            // Sessions are initiated after reading the first bytes (avoids disconnects)
+	SessionInitationTimeout: time.Second * 0, // Waiting forever by default
+	SourceIP:                "",
+}
+
 type TCPServerConfiguration struct {
 	Timeout                 time.Duration
 	Deadline                time.Duration
