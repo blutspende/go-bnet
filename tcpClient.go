@@ -16,11 +16,10 @@ import (
 */
 type tcpClientConnectionAndSession struct {
 	hostname         string
-	sourceIP         string
 	port             int
 	lowLevelProtocol protocol.Implementation
 	proxy            ConnectionType
-	timingConfig     TCPServerConfiguration
+	timingConfig     TCPClientConfiguration
 	conn             net.Conn
 	connected        bool
 	isStopped        bool
@@ -29,17 +28,16 @@ type tcpClientConnectionAndSession struct {
 
 func CreateNewTCPClient(hostname string, port int,
 	lowLevelProtocol protocol.Implementation,
-	proxy ConnectionType, sourceIP string, timing ...TCPServerConfiguration) ConnectionAndSessionInstance {
-	var thetiming TCPServerConfiguration
+	proxy ConnectionType, timing ...TCPClientConfiguration) ConnectionAndSessionInstance {
+	var thetiming TCPClientConfiguration
 	if len(timing) == 0 {
-		thetiming = DefaultTCPServerSettings
+		thetiming = DefaultTCPClientSettings
 	} else {
 		thetiming = timing[0]
 	}
 
 	return &tcpClientConnectionAndSession{
 		hostname:         hostname,
-		sourceIP:         sourceIP,
 		port:             port,
 		lowLevelProtocol: lowLevelProtocol,
 		proxy:            proxy,
@@ -173,8 +171,8 @@ func (s *tcpClientConnectionAndSession) ensureConnected() error {
 	}
 
 	dialer := &net.Dialer{}
-	if s.sourceIP != "" {
-		sourceIP, err := net.ResolveTCPAddr("tcp", s.sourceIP+":0")
+	if s.timingConfig.SourceIP != "" {
+		sourceIP, err := net.ResolveTCPAddr("tcp", s.timingConfig.SourceIP+":0")
 		if err != nil {
 			if s.handler != nil {
 				s.handler.Error(s, ErrorConnect, err)

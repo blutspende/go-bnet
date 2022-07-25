@@ -77,8 +77,8 @@ func TestClientConnectReceiveAndSendRaw(t *testing.T) {
 
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4001,
 		protocol.Raw(protocol.DefaultRawProtocolSettings()),
-		NoLoadBalancer, "",
-		DefaultTCPServerSettings)
+		NoLoadBalancer,
+		DefaultTCPClientSettings)
 
 	err := tcpClient.Connect()
 	assert.Nil(t, err)
@@ -113,7 +113,7 @@ func TestClientProtocolSTXETX(t *testing.T) {
 
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4002,
 		protocol.STXETX(protocol.DefaultSTXETXProtocolSettings()),
-		NoLoadBalancer, "", DefaultTCPServerSettings)
+		NoLoadBalancer, DefaultTCPClientSettings)
 
 	// Receiving from instrument expecting STX and ETX removed
 	TESTSTRING := "H|\\^&|||bloodlab-net|e2etest||||||||20220614163728\nL|1|N"
@@ -144,8 +144,8 @@ func TestClientRemoteAddress(t *testing.T) {
 
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4003,
 		protocol.STXETX(&protocol.STXETXProtocolSettings{}),
-		NoLoadBalancer, "",
-		DefaultTCPServerSettings)
+		NoLoadBalancer,
+		DefaultTCPClientSettings)
 
 	tcpClient.Connect()
 	addr, _ := tcpClient.RemoteAddress()
@@ -184,8 +184,8 @@ func TestClientRun(t *testing.T) {
 
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4004,
 		protocol.Raw(protocol.DefaultRawProtocolSettings()),
-		NoLoadBalancer, "",
-		DefaultTCPServerSettings)
+		NoLoadBalancer,
+		DefaultTCPClientSettings)
 
 	var session ClientTestSession
 	session.connectionEventOccured = false
@@ -256,8 +256,8 @@ func TestLis1A1ProtocolClient(t *testing.T) {
 
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4004,
 		protocol.Lis1A1Protocol(protocol.DefaultLis1A1ProtocolSettings()),
-		NoLoadBalancer, "",
-		DefaultTCPServerSettings)
+		NoLoadBalancer,
+		DefaultTCPClientSettings)
 
 	err := tcpClient.Connect()
 	assert.Nil(t, err)
@@ -316,8 +316,8 @@ func TestSourceIPClient(t *testing.T) {
 
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4005,
 		protocol.Raw(protocol.DefaultRawProtocolSettings()),
-		NoLoadBalancer, "",
-		DefaultTCPServerSettings)
+		NoLoadBalancer,
+		DefaultTCPClientSettings)
 
 	err := tcpClient.Connect()
 	assert.Nil(t, err)
@@ -327,8 +327,8 @@ func TestSourceIPClient(t *testing.T) {
 	currentLocalAddress := "127.0.0.1"
 	tcpClient2 := CreateNewTCPClient("127.0.0.1", 4005,
 		protocol.Raw(protocol.DefaultRawProtocolSettings()),
-		NoLoadBalancer, currentLocalAddress,
-		DefaultTCPServerSettings)
+		NoLoadBalancer,
+		DefaultTCPClientSettings.SetSourceIP(currentLocalAddress))
 	err = tcpClient2.Connect()
 	assert.Nil(t, err)
 
