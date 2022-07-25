@@ -314,7 +314,6 @@ func TestSourceIPClient(t *testing.T) {
 
 	go tcpServer.Run(&handler)
 
-	// 10.190.21.235
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4005,
 		protocol.Raw(protocol.DefaultRawProtocolSettings()),
 		NoLoadBalancer, "",
@@ -326,8 +325,7 @@ func TestSourceIPClient(t *testing.T) {
 	assert.Equal(t, "127.0.0.1", handler.lastConnectedIp)
 
 	currentLocalAddress := "127.0.0.1"
-	// currentLocalAddress := "10.190.21.235"
-	tcpClient2 := CreateNewTCPClient("0.0.0.0", 4005,
+	tcpClient2 := CreateNewTCPClient("127.0.0.1", 4005,
 		protocol.Raw(protocol.DefaultRawProtocolSettings()),
 		NoLoadBalancer, currentLocalAddress,
 		DefaultTCPServerSettings)
