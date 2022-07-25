@@ -176,7 +176,10 @@ func (s *tcpClientConnectionAndSession) ensureConnected() error {
 	if s.sourceIP != "" {
 		sourceIP, err := net.ResolveTCPAddr("tcp", s.sourceIP+":0")
 		if err != nil {
-			s.handler.Error(s, ErrorConnect, err)
+			if s.handler != nil {
+				s.handler.Error(s, ErrorConnect, err)
+			}
+			return err
 		} else {
 			dialer.LocalAddr = sourceIP
 		}
