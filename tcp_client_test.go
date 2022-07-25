@@ -77,7 +77,7 @@ func TestClientConnectReceiveAndSendRaw(t *testing.T) {
 
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4001,
 		protocol.Raw(protocol.DefaultRawProtocolSettings()),
-		NoLoadBalancer,
+		NoLoadBalancer, "",
 		DefaultTCPServerSettings)
 
 	err := tcpClient.Connect()
@@ -113,7 +113,7 @@ func TestClientProtocolSTXETX(t *testing.T) {
 
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4002,
 		protocol.STXETX(protocol.DefaultSTXETXProtocolSettings()),
-		NoLoadBalancer, DefaultTCPServerSettings)
+		NoLoadBalancer, "", DefaultTCPServerSettings)
 
 	// Receiving from instrument expecting STX and ETX removed
 	TESTSTRING := "H|\\^&|||bloodlab-net|e2etest||||||||20220614163728\nL|1|N"
@@ -144,7 +144,7 @@ func TestClientRemoteAddress(t *testing.T) {
 
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4003,
 		protocol.STXETX(&protocol.STXETXProtocolSettings{}),
-		NoLoadBalancer,
+		NoLoadBalancer, "",
 		DefaultTCPServerSettings)
 
 	tcpClient.Connect()
@@ -184,7 +184,7 @@ func TestClientRun(t *testing.T) {
 
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4004,
 		protocol.Raw(protocol.DefaultRawProtocolSettings()),
-		NoLoadBalancer,
+		NoLoadBalancer, "",
 		DefaultTCPServerSettings)
 
 	var session ClientTestSession
@@ -256,7 +256,7 @@ func TestLis1A1ProtocolClient(t *testing.T) {
 
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4004,
 		protocol.Lis1A1Protocol(protocol.DefaultLis1A1ProtocolSettings()),
-		NoLoadBalancer,
+		NoLoadBalancer, "",
 		DefaultTCPServerSettings)
 
 	err := tcpClient.Connect()
@@ -276,4 +276,65 @@ func TestLis1A1ProtocolClient(t *testing.T) {
 
 	tcpServer.Stop()
 	tcpClient.Stop()
+}
+
+type sourceIPHandler struct {
+	receiveQ                    chan []byte
+	didReceiveDisconnectMessage bool
+	lastConnectedIp             string
+	lasterror                   error
+}
+
+func (s *sourceIPHandler) Connected(session Session) error {
+	s.lastConnectedIp, s.lasterror = session.RemoteAddress()
+	return nil
+}
+
+func (s *sourceIPHandler) Disconnected(session Session) {
+	s.didReceiveDisconnectMessage = true
+}
+
+func (s *sourceIPHandler) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
+	fmt.Println("Eventhandler : ", string(fileData))
+	s.receiveQ <- fileData
+}
+
+func (s *sourceIPHandler) Error(session Session, errorType ErrorType, err error) {
+	log.Fatal("Fatal error:", err)
+}
+
+func TestSourceIPClient(t *testing.T) {
+	tcpServer := CreateNewTCPServerInstance(4005, protocol.Raw(protocol.DefaultRawProtocolSettings()),
+		NoLoadBalancer,
+		50,
+		DefaultTCPServerSettings,
+	)
+
+	var handler sourceIPHandler
+
+	go tcpServer.Run(&handler)
+
+	// 10.190.21.235
+	tcpClient := CreateNewTCPClient("127.0.0.1", 4005,
+		protocol.Raw(protocol.DefaultRawProtocolSettings()),
+		NoLoadBalancer, "",
+		DefaultTCPServerSettings)
+
+	err := tcpClient.Connect()
+	assert.Nil(t, err)
+	time.Sleep(time.Second)
+	assert.Equal(t, "127.0.0.1", handler.lastConnectedIp)
+
+	currentLocalAddress := "127.0.0.1"
+	// currentLocalAddress := "10.190.21.235"
+	tcpClient2 := CreateNewTCPClient("0.0.0.0", 4005,
+		protocol.Raw(protocol.DefaultRawProtocolSettings()),
+		NoLoadBalancer, currentLocalAddress,
+		DefaultTCPServerSettings)
+	err = tcpClient2.Connect()
+	assert.Nil(t, err)
+
+	assert.Equal(t, currentLocalAddress, handler.lastConnectedIp)
+	tcpClient.Close()
+	tcpClient2.Close()
 }

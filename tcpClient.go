@@ -16,6 +16,7 @@ import (
 */
 type tcpClientConnectionAndSession struct {
 	hostname         string
+	sourceIP         string
 	port             int
 	lowLevelProtocol protocol.Implementation
 	proxy            ConnectionType
@@ -28,7 +29,7 @@ type tcpClientConnectionAndSession struct {
 
 func CreateNewTCPClient(hostname string, port int,
 	lowLevelProtocol protocol.Implementation,
-	proxy ConnectionType, timing ...TCPServerConfiguration) ConnectionAndSessionInstance {
+	proxy ConnectionType, sourceIP string, timing ...TCPServerConfiguration) ConnectionAndSessionInstance {
 	var thetiming TCPServerConfiguration
 	if len(timing) == 0 {
 		thetiming = DefaultTCPServerSettings
@@ -38,6 +39,7 @@ func CreateNewTCPClient(hostname string, port int,
 
 	return &tcpClientConnectionAndSession{
 		hostname:         hostname,
+		sourceIP:         sourceIP,
 		port:             port,
 		lowLevelProtocol: lowLevelProtocol,
 		proxy:            proxy,
@@ -170,7 +172,17 @@ func (s *tcpClientConnectionAndSession) ensureConnected() error {
 		return nil
 	}
 
-	conn, err := net.Dial("tcp", s.hostname+fmt.Sprintf(":%d", s.port))
+	dialer := &net.Dialer{}
+	if s.sourceIP != "" {
+		sourceIP, err := net.ResolveTCPAddr("tcp", s.sourceIP+":0")
+		if err != nil {
+			s.handler.Error(s, ErrorConnect, err)
+		} else {
+			dialer.LocalAddr = sourceIP
+		}
+	}
+
+	conn, err := dialer.Dial("tcp", s.hostname+fmt.Sprintf(":%d", s.port))
 	if err != nil {
 		if s.handler != nil {
 			s.handler.Error(s, ErrorConnect, err)
