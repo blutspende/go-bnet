@@ -22,6 +22,7 @@ func (th *testFtpHandler) Connected(session bnet.Session) error {
 
 func (th *testFtpHandler) DataReceived(session bnet.Session, data []byte, receiveTimestamp time.Time) error {
 	fmt.Println("Data received ", string(data))
+	session.Send()
 	return errors.New("Dont delete pleeea")
 }
 
@@ -35,7 +36,7 @@ func (th *testFtpHandler) Error(session bnet.Session, typeOfError bnet.ErrorType
 }
 
 func main() {
-	server, err := bnet.CreateFTP(bnet.SFTP, "172.23.114.30", 22, "/tests", "*.dat",
+	server, err := bnet.CreateSFTPClient(bnet.SFTP, "172.23.114.30", 22, "/tests", "*.dat",
 		bnet.DefaultFTPConfig().UserPass("test", "testpaul").PollInterval(5*time.Second),
 	)
 
@@ -45,6 +46,7 @@ func main() {
 
 	var handler testFtpHandler
 
-	server.Run(&handler)
+	go server.Run(&handler)
 
+	server.Send([][]byte{})
 }
