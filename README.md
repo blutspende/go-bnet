@@ -80,6 +80,36 @@ func main() {
 ### SFTP Client
 Connect to a sftp server and keep polling. New files are presented through same API like TCP-Server and TCP-Client as if they were transmitted that way.
 
+```CreateFTP(ftptype, host, port, directory, filemask, config)```
+
+#### ftptype 
+  - FTP for ftp server
+  - SFTP for sftp server
+
+### Example
+``` Login with User and Password
+ 
+ func (h *myhandler)DataReceived(session Session, data []byte) {
+
+ }
+
+func main() {
+ 
+ var hander myhandler
+
+ server := CreateFTP(SFTP, "localhost", 25, "/sourcefolder", "*.dat",
+   DefaultFTPConfig()
+    .UserPass("Istvan", "Pass")
+    .HostKey("ajsdflkasjflksajklfjaslfjlksadfj")
+	.PollInterval(60 * Duration.Seconds)
+	.DialTimeout(10 * Duration.Seconds)
+	.DontDeleteAfterRead()
+  )
+
+  server.Run(handler)
+}
+```
+
 ### Protocols
 
 #### Raw Protocol (TCP/Client + TCP/Server)
