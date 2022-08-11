@@ -8,138 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jlaffaye/ftp"
 	"github.com/pkg/sftp"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/ssh"
 )
-
-/*
-type ftpClientInstance struct {
-	hostname    string
-	port        int
-	path        string
-	user        string
-	password    string
-	hostpath    string
-	timings     TCPServerConfiguration
-	ftpClient   *ftp.ServerConn
-	isConnected bool
-}*/
-
-/*
-func CreateNewFTPClient(
-	hostname string,
-	port int,
-	path string,
-	user string,
-	password string,
-	timings TCPServerConfiguration,
-	secureConnectionOptions ...SecureConnectionOptions) ConnectionAndSessionInstance {
-	if secureConnectionOptions != nil {
-		panic("SFTP client is not implemented yet!")
-	}
-
-	return &ftpClientInstance{
-		hostname: hostname,
-		port:     port,
-		path:     path,
-		user:     user,
-		password: password,
-		timings:  timings,
-	}
-}
-
-func (c *ftpClientInstance) Run(handler Handler) {
-	panic("Run is not implemented yet!")
-}
-
-func (c *ftpClientInstance) Stop() {
-	panic("Stop is not implemented yet!")
-}
-
-func (instance *ftpClientInstance) FindSessionsByIp(ip string) []Session {
-	panic("FindSessionsByIp is not implemented yet!")
-}
-
-// ---------- Session Methods starting here
-
-func (c *ftpClientInstance) IsAlive() bool {
-	return c.isConnected
-}
-
-func (c *ftpClientInstance) Send(msg [][]byte) (int, error) {
-	for _, line := range msg {
-		reader := bytes.NewReader(line)
-		if err := c.ftpClient.Stor(c.path, reader); err != nil {
-			return 0, err
-		}
-	}
-
-	return 0, nil
-}
-
-func (c *ftpClientInstance) Receive() ([]byte, error) {
-	var ftpResponse *ftp.Response
-	var err error
-
-	if ftpResponse, err = c.ftpClient.Retr(c.path); err != nil {
-		return []byte{}, err
-	}
-
-	var fileContent []byte
-	if fileContent, err = ioutil.ReadAll(ftpResponse); err != nil {
-		return []byte{}, err
-	}
-
-	return fileContent, nil
-}
-
-func (c *ftpClientInstance) Close() error {
-	if !c.isConnected {
-		return nil
-	}
-
-	if err := c.ftpClient.Quit(); err != nil {
-		return err
-	}
-
-	c.isConnected = false
-
-	return nil
-}
-
-func (c *ftpClientInstance) WaitTermination() error {
-	panic("WaitTermination is not implemented yet!")
-}
-
-func (c *ftpClientInstance) RemoteAddress() (string, error) {
-	panic("RemoteAddress is not implemented yet!")
-}
-
-func (c *ftpClientInstance) Connect() error {
-	if c.isConnected {
-		return nil
-	}
-
-	var err error
-	var serverConnection *ftp.ServerConn
-
-	ftpServerUrl := fmt.Sprintf("%s:%d", c.hostname, c.port)
-	serverConnection, err = ftp.Dial(ftpServerUrl, ftp.DialWithTimeout(5*time.Second))
-	if err != nil {
-		return err
-	}
-
-	if err = serverConnection.Login(c.user, c.password); err != nil {
-		return err
-	}
-
-	c.ftpClient = serverConnection
-	c.isConnected = true
-
-	return nil
-}
-*/
 
 type FTPType int
 
@@ -165,6 +38,7 @@ type ftpConfiguration struct {
 	hostkey         string
 	pollInterval    time.Duration
 	deleteAfterRead bool
+	dialTimeout     time.Duration
 }
 
 type ftpServerInstance struct {
@@ -222,11 +96,17 @@ func (conf *ftpConfiguration) DontDeleteAfterRead() *ftpConfiguration {
 	return conf
 }
 
+func (conf *ftpConfiguration) DialTimeout(dialTimeout time.Duration) *ftpConfiguration {
+	conf.dialTimeout = dialTimeout
+	return conf
+}
+
 func DefaultFTPConfig() *ftpConfiguration {
 	return &ftpConfiguration{
 		authMethod:      PASSWORD,
 		pollInterval:    60 * time.Second,
 		deleteAfterRead: true,
+		dialTimeout:     10 * time.Second,
 	}
 }
 
@@ -285,6 +165,8 @@ func (instance *ftpServerInstance) runWithSFTP(handler Handler) {
 		sshConfig.HostKeyCallback = ssh.InsecureIgnoreHostKey()
 	}
 
+	sshConfig.Timeout = instance.config.dialTimeout
+
 	ftpserver := fmt.Sprintf("%s:%s", instance.host, instance.port)
 
 	sshConnection, err := ssh.Dial("tcp", ftpserver, sshConfig)
@@ -299,6 +181,11 @@ func (instance *ftpServerInstance) runWithSFTP(handler Handler) {
 		log.Error().Err(err).Msg("Open - NewClient")
 		sshConnection.Close()
 		// TODO LOG ERROR
+		return
+	}
+
+	if handler.Connected(instance) != nil {
+		// TODO error handler
 		return
 	}
 
@@ -349,6 +236,12 @@ func (instance *ftpServerInstance) runWithSFTP(handler Handler) {
 					continue
 				}
 
+				err = fileread.Close()
+				if err != nil {
+					log.Error().Err(err).Msg("ReadFiles - Close")
+					continue
+				}
+
 				err = handler.DataReceived(instance, filebuffer, file.ModTime())
 
 				if err == nil && instance.config.deleteAfterRead { // if processing was successful
@@ -359,11 +252,6 @@ func (instance *ftpServerInstance) runWithSFTP(handler Handler) {
 					}
 				}
 
-				err = fileread.Close()
-				if err != nil {
-					log.Error().Err(err).Msg("ReadFiles - Close")
-					continue
-				}
 			}
 		}
 	}
@@ -372,6 +260,93 @@ func (instance *ftpServerInstance) runWithSFTP(handler Handler) {
 }
 
 func (instance *ftpServerInstance) runWithFTP(handler Handler) {
+
+	var err error
+
+	ftpClient, err := ftp.Dial(fmt.Sprintf("%s:%s", instance.host, instance.port), ftp.DialWithTimeout(instance.config.dialTimeout))
+	if err != nil {
+		log.Error().Err(err).Msg("Open - Dial")
+		// TODO Error handling
+		return
+	}
+
+	if instance.config.authMethod != PASSWORD {
+		//TODO: Error handling invalid authentication
+	}
+
+	err = ftpClient.Login(instance.config.user, instance.config.key)
+	if err != nil {
+		log.Error().Err(err).Msg("Open - Login")
+		// TODO Error handling
+		return
+	}
+
+	if handler.Connected(instance) != nil {
+		// TODO error handler
+		return
+	}
+
+	ftpPath := strings.TrimRight(instance.hostpath, "/") + "/"
+
+	for {
+
+		time.Sleep(instance.config.pollInterval)
+
+		files, err := ftpClient.List(ftpPath)
+		if err != nil {
+			log.Error().Err(err).Msg("ReadFiles - List")
+			// TODO Error handling
+			continue
+		}
+
+		for _, file := range files {
+
+			match, err := sftp.Match(strings.ToUpper(instance.filemask), strings.ToUpper(file.Name))
+			if err != nil {
+				log.Error().Err(err).Msg("ReadFiles - Match")
+				continue
+			}
+
+			if match {
+				log.Info().Msgf("readsFtpOrders filename: %s", file.Name)
+
+				// Rename to .processing
+				err := ftpClient.Rename(ftpPath+file.Name, ftpPath+file.Name+".processing")
+				if err != nil {
+					log.Error().Err(err).Msg("RenameFile")
+					continue
+				}
+
+				// Read the content
+				fileread, err := ftpClient.Retr(ftpPath + file.Name + ".processing")
+				if err != nil {
+					log.Error().Err(err).Msg("ReadFiles - Retr")
+					continue
+				}
+				filebuffer, err := ioutil.ReadAll(fileread)
+				if err != nil {
+					log.Error().Err(err).Msg("ReadFiles - ReadAll")
+					continue
+				}
+
+				err = fileread.Close()
+				if err != nil {
+					log.Error().Err(err).Msg("ReadFiles - Close")
+					continue
+				}
+
+				err = handler.DataReceived(instance, filebuffer, file.Time)
+
+				if err == nil && instance.config.deleteAfterRead { // if processing was successful
+					err := ftpClient.Delete(ftpPath + file.Name + ".processing")
+					if err != nil {
+						log.Error().Err(err).Msg(ftpPath + file.Name + ".processing")
+						// TODO Error handling
+					}
+				}
+			}
+		}
+	}
 }
 
 func (instance *ftpServerInstance) IsAlive() bool {

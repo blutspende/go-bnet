@@ -98,10 +98,12 @@ func main() {
  var hander myhandler
 
  server := CreateFTP(SFTP, "localhost", 25, "/sourcefolder", "*.dat",
-   DefaultFtpConfig()
+   DefaultFTPConfig()
     .UserPass("Istvan", "Pass")
     .HostKey("ajsdflkasjflksajklfjaslfjlksadfj")
 	.PollInterval(60 * Duration.Seconds)
+	.DialTimeout(10 * Duration.Seconds)
+	.DontDeleteAfterRead()
   )
 
   server.Run(handler)
