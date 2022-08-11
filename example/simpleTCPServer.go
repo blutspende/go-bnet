@@ -24,13 +24,15 @@ func (s *MySessionHandler) Error(session bnet.Session, errorType bnet.ErrorType,
 	fmt.Println(err)
 }
 
-func (s *MySessionHandler) DataReceived(session bnet.Session, data []byte, receiveTimestamp time.Time) {
+func (s *MySessionHandler) DataReceived(session bnet.Session, data []byte, receiveTimestamp time.Time) error {
 	rad, _ := session.RemoteAddress()
 	fmt.Printf("From %s received '%s'", rad, string(data))
 
 	dataToSend := make([][]byte, 0)
 	dataToSend = append(dataToSend, []byte(fmt.Sprintf("You are sending from %s", rad)))
 	session.Send(dataToSend)
+
+	return nil
 }
 
 func main() {

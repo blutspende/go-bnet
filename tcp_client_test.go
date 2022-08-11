@@ -170,8 +170,9 @@ func (s *ClientTestSession) Disconnected(session Session) {
 	s.disconnectedEventOccured = true
 }
 
-func (s *ClientTestSession) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
+func (s *ClientTestSession) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) error {
 	s.receiveBuffer = s.receiveBuffer + string(fileData)
+	return nil
 }
 
 func (s *ClientTestSession) Error(session Session, typeOfError ErrorType, err error) {
@@ -235,9 +236,10 @@ func (s *lis1a1Handler) Disconnected(session Session) {
 	s.didReceiveDisconnectMessage = true
 }
 
-func (s *lis1a1Handler) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
+func (s *lis1a1Handler) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) error {
 	fmt.Println("Eventhandler : ", string(fileData))
 	s.receiveQ <- fileData
+	return nil
 }
 
 func (s *lis1a1Handler) Error(session Session, errorType ErrorType, err error) {
@@ -294,9 +296,11 @@ func (s *sourceIPHandler) Disconnected(session Session) {
 	s.didReceiveDisconnectMessage = true
 }
 
-func (s *sourceIPHandler) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
+func (s *sourceIPHandler) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) error {
 	fmt.Println("Eventhandler : ", string(fileData))
 	s.receiveQ <- fileData
+
+	return nil
 }
 
 func (s *sourceIPHandler) Error(session Session, errorType ErrorType, err error) {

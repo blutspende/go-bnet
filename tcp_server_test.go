@@ -32,13 +32,15 @@ func (s *testRawDataProtocolSession) Disconnected(session Session) {
 	s.didReceiveDisconnectMessage = true
 }
 
-func (s *testRawDataProtocolSession) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
+func (s *testRawDataProtocolSession) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) error {
 	s.lastConnected, _ = session.RemoteAddress()
 	s.receiveQ <- fileData
 
 	anResponse := make([][]byte, 0)
 	anResponse = append(anResponse, []byte("An adequate response"))
 	session.Send(anResponse)
+
+	return nil
 }
 
 func (s *testRawDataProtocolSession) Error(session Session, errorType ErrorType, err error) {
@@ -156,7 +158,8 @@ func (s *testTCPServerMaxConnections) Connected(session Session) error {
 func (s *testTCPServerMaxConnections) Disconnected(session Session) {
 }
 
-func (s *testTCPServerMaxConnections) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
+func (s *testTCPServerMaxConnections) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) error {
+	return nil
 }
 
 func (s *testTCPServerMaxConnections) Error(session Session, errorType ErrorType, err error) {
@@ -236,7 +239,7 @@ func (s *testSTXETXProtocolSession) Disconnected(session Session) {
 	s.didReceiveDisconnectMessage = true
 }
 
-func (s *testSTXETXProtocolSession) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
+func (s *testSTXETXProtocolSession) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) error {
 	s.receiveQ <- fileData
 
 	// build a response that exceeds the MTU to ensure stx-etx reads start and stop codes
@@ -248,6 +251,8 @@ func (s *testSTXETXProtocolSession) DataReceived(session Session, fileData []byt
 	largeData := make([][]byte, 0)
 	largeData = append(largeData, []byte(largeDataPackage))
 	session.Send(largeData)
+
+	return nil
 }
 
 func (s *testSTXETXProtocolSession) Error(session Session, errorType ErrorType, err error) {
@@ -323,9 +328,10 @@ func (s *genericRecordingHandler) Disconnected(session Session) {
 	s.didReceiveDisconnectMessage = true
 }
 
-func (s *genericRecordingHandler) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
+func (s *genericRecordingHandler) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) error {
 	fmt.Println("Eventhandler : ", string(fileData))
 	s.receiveQ <- fileData
+	return nil
 }
 
 func (s *genericRecordingHandler) Error(session Session, errorType ErrorType, err error) {
@@ -557,7 +563,8 @@ func (s *testTCPServerDeclineConnection) Connected(session Session) error {
 }
 
 func (s *testTCPServerDeclineConnection) Disconnected(session Session) {}
-func (s *testTCPServerDeclineConnection) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) {
+func (s *testTCPServerDeclineConnection) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) error {
+	return nil
 }
 func (s *testTCPServerDeclineConnection) Error(session Session, errorType ErrorType, err error) {}
 
