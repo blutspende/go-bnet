@@ -89,5 +89,7 @@ const (
 	ErrorConnectionLimit ErrorType = 6
 	ErrorAccept          ErrorType = 7 // error for Server
 	ErrorMaxConnections  ErrorType = 8
-	ErrorCreateSession   ErrorType = 9 // server only
+	ErrorCreateSession   ErrorType = 9  // server only
+	ErrorConfiguration   ErrorType = 10 // Error in configuration
+	ErrorLogin           ErrorType = 11
 )
