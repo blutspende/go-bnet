@@ -57,22 +57,25 @@ type ftpConfiguration struct {
 }
 
 type ftpServerInstance struct {
-	ftpType  FTPType
-	host     string
-	port     int
-	hostpath string
-	filemask string
-	config   *ftpConfiguration
+	ftpType            FTPType
+	host               string
+	port               int
+	hostpath           string
+	filemask           string
+	config             *ftpConfiguration
+	isRunning          bool
+	terminationChannel chan bool
 }
 
 func CreateSFTPClient(ftptype FTPType, host string, port int, hostpath, filemask string, config *ftpConfiguration) (ConnectionInstance, error) {
 	instance := &ftpServerInstance{
-		ftpType:  ftptype,
-		host:     host,
-		port:     port,
-		config:   config,
-		hostpath: hostpath,
-		filemask: filemask,
+		ftpType:   ftptype,
+		host:      host,
+		port:      port,
+		config:    config,
+		hostpath:  hostpath,
+		filemask:  filemask,
+		isRunning: false,
 	}
 	return instance, nil
 }
@@ -251,9 +254,9 @@ func (instance *ftpServerInstance) runWithSFTP(handler Handler) {
 
 	ftpPath := strings.TrimRight(instance.hostpath, "/") + "/"
 
-	for {
+	instance.isRunning = true
 
-		time.Sleep(instance.config.pollInterval)
+	for instance.isRunning {
 
 		files, err := sftpClient.ReadDir(ftpPath)
 		if err != nil {
@@ -312,6 +315,12 @@ func (instance *ftpServerInstance) runWithSFTP(handler Handler) {
 
 			}
 		}
+
+		select {
+		case <-time.After(instance.config.pollInterval):
+		case <-instance.terminationChannel:
+			instance.isRunning = false
+		}
 	}
 }
 
@@ -347,9 +356,9 @@ func (instance *ftpServerInstance) runWithFTP(handler Handler) {
 
 	ftpPath := strings.TrimRight(instance.hostpath, "/") + "/"
 
-	for {
+	instance.isRunning = true
 
-		time.Sleep(instance.config.pollInterval)
+	for instance.isRunning {
 
 		files, err := ftpClient.List(ftpPath)
 		if err != nil {
@@ -410,24 +419,31 @@ func (instance *ftpServerInstance) runWithFTP(handler Handler) {
 				}
 			}
 		}
+
+		select {
+		case <-time.After(instance.config.pollInterval):
+		case <-instance.terminationChannel:
+			instance.isRunning = false
+		}
 	}
 }
 
 func (instance *ftpServerInstance) IsAlive() bool {
-	return true // TODO
+	return instance.isRunning
 }
 
 func (instance *ftpServerInstance) Send(msg [][]byte) (int, error) {
-
+	var err error
+	var bytesWritten int
 	switch instance.ftpType {
 	case FTP:
-		instance.ftpSend(msg)
+		bytesWritten, err = instance.ftpSend(msg)
 	case SFTP:
-		instance.sftpSend(msg)
+		bytesWritten, err = instance.sftpSend(msg)
 	default:
 		// This should never execute
 	}
-	return 0, errors.New("not implemented")
+	return bytesWritten, err
 }
 
 func (instance *ftpServerInstance) ftpSend(msg [][]byte) (int, error) {
@@ -535,13 +551,13 @@ func (instance *ftpServerInstance) sftpSend(msg [][]byte) (int, error) {
 	if err != nil {
 		return -1, err
 	}
-	_, err = dstFile.Write(databytes)
+	bytesWritten, err := dstFile.Write(databytes)
 	if err != nil {
 		return -1, err
 	}
 	dstFile.Close()
 
-	return -1, nil
+	return bytesWritten, nil
 }
 
 func (instance *ftpServerInstance) addLineEndings(msg [][]byte, linebreak LINEBREAK) []byte {
@@ -594,11 +610,15 @@ func (instance *ftpServerInstance) generateFileName(filename, prefix, suffix str
 }
 
 func (instance *ftpServerInstance) Receive() ([]byte, error) {
-	return []byte{}, errors.New("Not implemented")
+	return []byte{}, errors.New("Not implemented, use Run(handler) method and asyncronous method from handler")
 }
 
+// should call isAlive() for confirmation of a successfull termination
 func (instance *ftpServerInstance) Close() error {
-	return errors.New("Not implemented")
+	if instance.IsAlive() {
+		instance.terminationChannel <- true
+	}
+	return nil // anything else freezes
 }
 
 func (instance *ftpServerInstance) WaitTermination() error {

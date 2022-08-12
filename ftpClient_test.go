@@ -1,15 +1,23 @@
 package bloodlabnet
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"fmt"
+	"os"
+	"path"
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
 
 type testFtpHandler struct {
 	hadConnected bool
+	dataReceived bool
 	hadError     bool
+	receiveQ     chan []byte
 }
 
 func (th *testFtpHandler) Connected(session Session) error {
@@ -18,6 +26,9 @@ func (th *testFtpHandler) Connected(session Session) error {
 }
 
 func (th *testFtpHandler) DataReceived(session Session, data []byte, receiveTimestamp time.Time) error {
+	th.dataReceived = true
+	th.receiveQ <- data
+	fmt.Println("Got something")
 	return nil
 }
 
@@ -29,23 +40,108 @@ func (th *testFtpHandler) Error(session Session, typeOfError ErrorType, err erro
 	th.hadError = true
 }
 
-// Unfortunately it was not possible to find a sftp-mock server to test
-// And create
-func testSFTPServerConnect(t *testing.T) {
+func TestSFTPServerReceive(t *testing.T) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	assert.Nil(t, err)
 
-	// staart a ftp server
-	// place a file istvan.dat here
+	myPath, err := os.Executable()
+	assert.Nil(t, err)
+
+	myPath = path.Dir(myPath)
+	testFTPdirname := myPath + "/" + "ftptest"
+	err = os.Mkdir(testFTPdirname, 0777)
+	assert.Nil(t, err)
+
+	sftpserver := CreateSFTPServer(testFTPdirname)
+	go sftpserver.RunSimpleSFTPServer(privateKey)
 
 	var myHandler testFtpHandler
+	myHandler.receiveQ = make(chan []byte)
 
-	server, err := CreateSFTPClient(SFTP, "localhost", 5000, "/", "*.dat",
-		DefaultFTPConfig().UserPass("Istvan", "Pass"))
+	client, err := CreateSFTPClient(SFTP, "localhost", 2022, testFTPdirname, "*.dat",
+		DefaultFTPConfig().UserPass("testuser", "tiger").PollInterval(1).DontDeleteAfterRead())
 
 	assert.Nil(t, err)
-	go server.Run(&myHandler)
+	go client.Run(&myHandler)
+
+	sftpserver.MakeFile("test.dat", 0544)
+
+	select {
+	case receivedMsg := <-myHandler.receiveQ:
+		assert.True(t, myHandler.hadConnected)
+		assert.True(t, myHandler.dataReceived)
+		assert.NotNil(t, receivedMsg, "Received a valid response")
+		assert.Equal(t, TESTSTRING, string(receivedMsg))
+	case <-time.After(2 * time.Second):
+		t.Fatalf("Can not receive messages from the client")
+	}
 
 	// wait for data or timeout
-
-	assert.True(t, myHandler.hadConnected)
 	assert.False(t, myHandler.hadError)
+	err = os.RemoveAll(testFTPdirname)
+	assert.Nil(t, err, "Please delete ftp test directory:", testFTPdirname)
+}
+
+func TestSFTPServerSend(t *testing.T) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	assert.Nil(t, err)
+
+	myPath, err := os.Executable()
+	assert.Nil(t, err)
+
+	myPath = path.Dir(myPath)
+	testFTPdirname := myPath + "/" + "ftptest"
+	err = os.Mkdir(testFTPdirname, 0777)
+	assert.Nil(t, err)
+
+	sftpserver := CreateSFTPServer(testFTPdirname)
+	go sftpserver.RunSimpleSFTPServer(privateKey)
+
+	var myHandler testFtpHandler
+	myHandler.receiveQ = make(chan []byte)
+
+	testFTPConfig := DefaultFTPConfig().UserPass("testuser", "tiger").PollInterval(1).DontDeleteAfterRead()
+	testFTPConfig.linebreak = LINEBREAK_CRLF
+	client, err := CreateSFTPClient(SFTP, "localhost", 2022, testFTPdirname, "*.dat", testFTPConfig)
+	assert.Nil(t, err)
+
+	var testMsg [][]byte
+	testMsg = append(testMsg, []byte(TESTSTRING))
+	count, err := client.Send(testMsg)
+	expectedCount := calculateMessageSize(TESTSTRING, testFTPConfig.linebreak)
+	assert.Equal(t, expectedCount, count)
+	assert.Nil(t, err)
+
+	// wait for data or timeout
+	assert.False(t, myHandler.hadError)
+	// uncomment line below to check your files
+	err = os.RemoveAll(testFTPdirname)
+	assert.Nil(t, err, "Please delete ftp test directory:", testFTPdirname)
+}
+
+func calculateMessageSize(message string, linebreak LINEBREAK) int {
+	var lbreak []byte
+	var msg [][]byte
+	msg = append(msg, []byte(message))
+
+	switch linebreak {
+	case LINEBREAK_CR:
+		lbreak = []byte{0x0d}
+	case LINEBREAK_CRLF:
+		lbreak = []byte{0x0d, 0x0a}
+	case LINEBREAK_LF:
+		lbreak = []byte{0x0a}
+	default:
+		// this should never happen
+		log.Error().Msg("Invalid linebreak configuration")
+		lbreak = []byte{0x0a}
+	}
+
+	databytes := make([]byte, 0)
+	for i := 0; i < len(msg); i++ {
+		databytes = append(databytes, msg[i]...)
+		databytes = append(databytes, lbreak...)
+	}
+
+	return len(databytes)
 }

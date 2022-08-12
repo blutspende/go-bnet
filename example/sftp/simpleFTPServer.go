@@ -1,4 +1,4 @@
-package main
+package testsftp
 
 import (
 	"fmt"
