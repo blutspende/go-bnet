@@ -20,7 +20,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-const TESTSTRING = "teststring\nzweite Zeile\n"
+const TESTSTRING = "٤ḞԍНǏ𝙅ƘԸⲘ"
 
 type sftpserver struct {
 	path string

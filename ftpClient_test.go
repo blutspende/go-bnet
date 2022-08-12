@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -108,8 +107,7 @@ func TestSFTPServerSend(t *testing.T) {
 	var testMsg [][]byte
 	testMsg = append(testMsg, []byte(TESTSTRING))
 	count, err := client.Send(testMsg)
-	expectedCount := calculateMessageSize(TESTSTRING, testFTPConfig.linebreak)
-	assert.Equal(t, expectedCount, count)
+	assert.Equal(t, len(TESTSTRING), count)
 	assert.Nil(t, err)
 
 	// wait for data or timeout
@@ -117,31 +115,4 @@ func TestSFTPServerSend(t *testing.T) {
 	// uncomment line below to check your files
 	err = os.RemoveAll(testFTPdirname)
 	assert.Nil(t, err, "Please delete ftp test directory:", testFTPdirname)
-}
-
-func calculateMessageSize(message string, linebreak LINEBREAK) int {
-	var lbreak []byte
-	var msg [][]byte
-	msg = append(msg, []byte(message))
-
-	switch linebreak {
-	case LINEBREAK_CR:
-		lbreak = []byte{0x0d}
-	case LINEBREAK_CRLF:
-		lbreak = []byte{0x0d, 0x0a}
-	case LINEBREAK_LF:
-		lbreak = []byte{0x0a}
-	default:
-		// this should never happen
-		log.Error().Msg("Invalid linebreak configuration")
-		lbreak = []byte{0x0a}
-	}
-
-	databytes := make([]byte, 0)
-	for i := 0; i < len(msg); i++ {
-		databytes = append(databytes, msg[i]...)
-		databytes = append(databytes, lbreak...)
-	}
-
-	return len(databytes)
 }

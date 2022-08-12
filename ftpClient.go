@@ -432,6 +432,7 @@ func (instance *ftpServerInstance) IsAlive() bool {
 	return instance.isRunning
 }
 
+// return sum of message bytes or -1 if some error happened
 func (instance *ftpServerInstance) Send(msg [][]byte) (int, error) {
 	var err error
 	var bytesWritten int
@@ -483,7 +484,12 @@ func (instance *ftpServerInstance) ftpSend(msg [][]byte) (int, error) {
 		return -1, err
 	}
 
-	return -1, nil
+	count := 0
+	for _, line := range msg {
+		count += len(line)
+	}
+
+	return count, nil
 }
 
 func (instance *ftpServerInstance) sftpSend(msg [][]byte) (int, error) {
@@ -557,7 +563,14 @@ func (instance *ftpServerInstance) sftpSend(msg [][]byte) (int, error) {
 	}
 	dstFile.Close()
 
-	return bytesWritten, nil
+	count := -1
+	if len(databytes) == bytesWritten {
+		count = 0
+		for _, line := range msg {
+			count += len(line)
+		}
+	}
+	return count, nil
 }
 
 func (instance *ftpServerInstance) addLineEndings(msg [][]byte, linebreak LINEBREAK) []byte {
