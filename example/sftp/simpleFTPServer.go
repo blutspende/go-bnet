@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -22,8 +21,8 @@ func (th *testFtpHandler) Connected(session bnet.Session) error {
 
 func (th *testFtpHandler) DataReceived(session bnet.Session, data []byte, receiveTimestamp time.Time) error {
 	fmt.Println("Data received ", string(data))
-	session.Send()
-	return errors.New("Dont delete pleeea")
+
+	return nil
 }
 
 func (th *testFtpHandler) Disconnected(session bnet.Session) {
@@ -36,6 +35,7 @@ func (th *testFtpHandler) Error(session bnet.Session, typeOfError bnet.ErrorType
 }
 
 func main() {
+
 	server, err := bnet.CreateSFTPClient(bnet.SFTP, "172.23.114.30", 22, "/tests", "*.dat",
 		bnet.DefaultFTPConfig().UserPass("test", "testpaul").PollInterval(5*time.Second),
 	)
@@ -48,5 +48,9 @@ func main() {
 
 	go server.Run(&handler)
 
-	server.Send([][]byte{})
+	data := [][]byte{[]byte("Istvan ist ein seltener Name"), []byte("Es gibt gefühlte 2 Millionen Stephans in Deutschland")}
+
+	server.Send(data)
+
+	time.Sleep(60 * time.Second)
 }
