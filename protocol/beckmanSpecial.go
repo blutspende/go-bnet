@@ -193,7 +193,7 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 					// send fileData
 					fullMsg := make([]byte, 0)
 					for i, messageLine := range fileBuffer {
-						// Dirty skip first element because this is only RecordType + unitNo not needed in instrumentAPI
+						// skip first element because this is only RecordType + unitNo not needed in instrumentAPI
 						if i == 0 {
 							continue
 						}
