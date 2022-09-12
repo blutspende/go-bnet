@@ -181,11 +181,6 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 						protocolMsg.Data = []byte(err.Error())
 					}
 
-					//_, err = conn.Write([]byte{utilities.NAK})
-					//if err != nil {
-					//	protocolMsg.Data = append(protocolMsg.Data, []byte(err.Error())...)
-					//}
-
 					p.receiveQ <- protocolMsg
 					p.receiveThreadIsRunning = false
 					return
@@ -221,10 +216,6 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 						Data:   []byte("Invalid action code "),
 					}
 
-					//_, err = conn.Write([]byte{utilities.NAK})
-					//if err != nil {
-					//	protocolMsg.Data = append(protocolMsg.Data, []byte(err.Error())...)
-					//}
 					p.receiveQ <- protocolMsg
 					p.receiveThreadIsRunning = false
 					fmt.Println("Disconnect due to unexpected, unkown and unlikley error")
