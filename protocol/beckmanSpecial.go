@@ -194,7 +194,7 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 					fullMsg := make([]byte, 0)
 					for i, messageLine := range fileBuffer {
 						// skip first element because this is only RecordType + unitNo not needed in instrumentAPI
-						if i == 0 {
+						if i == 0 || len(messageLine) == 4 {
 							continue
 						}
 						fullMsg = append(fullMsg, messageLine...)
@@ -205,9 +205,8 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 						Status: DATA,
 						Data:   fullMsg,
 					}
-
-					p.receiveThreadIsRunning = false
-					return
+					fsm.ResetBuffer()
+					fsm.Init()
 				case JustAck:
 					conn.Write([]byte{utilities.ACK})
 				default:
