@@ -255,6 +255,7 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 					}
 
 					if err != nil {
+						err = fmt.Errorf("%w, receiveBuffer : %s", err, string(tcpReceiveBuffer[:n]))
 						protocolMsg.Data = []byte(err.Error())
 					}
 
@@ -358,7 +359,7 @@ func (proto *lis1A1) Interrupt() {
 	// not implemented (not required neither)
 }
 
-//  https://wiki.bloodlab.org/lib/exe/fetch.php?media=listnode:lis1-a.pdf
+// https://wiki.bloodlab.org/lib/exe/fetch.php?media=listnode:lis1-a.pdf
 func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int, error) {
 	if recursionDepth > 10 {
 		return -1, fmt.Errorf("the receiver does not accept any data")
