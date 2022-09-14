@@ -62,6 +62,7 @@ type processState struct {
 	LastChecksum    string
 	MessageLog      []string
 	ProtocolMessage protocolMessage
+	isRequest       bool
 }
 
 type beckmanSpecialProtocol struct {
@@ -85,6 +86,10 @@ func BeckmanSpecialProtocol(settings ...*BeckmanSpecialProtocolSettings) Impleme
 	}
 }
 
+const (
+	RequestStart utilities.ActionCode = "RequestStart"
+)
+
 func (p *beckmanSpecialProtocol) Interrupt() {
 	//TODO implement me
 	panic("implement me")
@@ -96,7 +101,18 @@ func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
 	// CHECK For If CheckSumCheck is enabled
 	return []utilities.Rule{
 		utilities.Rule{FromState: 0, Symbols: []byte{p.settings.startByte}, ToState: 1, ActionCode: JustAck, Scan: false},
-		utilities.Rule{FromState: 1, Symbols: []byte{'D', 'S', 'R', 'd'}, ToState: 2, Scan: true},
+		utilities.Rule{FromState: 1, Symbols: []byte{'D', 'S', 'd'}, ToState: 2, Scan: true},
+		utilities.Rule{FromState: 1, Symbols: []byte{'R'}, ToState: 10, Scan: true},
+
+		utilities.Rule{FromState: 10, Symbols: []byte{'B'}, ToState: 13, ActionCode: RequestStart, Scan: true},
+		utilities.Rule{FromState: 10, Symbols: printableChars8BitWithoutE, ToState: 11, Scan: true},
+		utilities.Rule{FromState: 11, Symbols: []byte{p.settings.endByte}, ToState: 12, ActionCode: LineReceived, Scan: false},
+		utilities.Rule{FromState: 11, Symbols: utilities.PrintableChars8Bit, ToState: 11, Scan: true},
+		utilities.Rule{FromState: 12, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 6, Scan: true},
+
+		utilities.Rule{FromState: 13, Symbols: []byte{p.settings.endByte}, ToState: 6, ActionCode: LineReceived, Scan: false},
+		utilities.Rule{FromState: 13, Symbols: utilities.PrintableChars8Bit, ToState: 13, Scan: true},
+
 		utilities.Rule{FromState: 2, Symbols: printableChars8BitWithoutE, ToState: 3, Scan: true},
 		utilities.Rule{FromState: 3, Symbols: []byte{p.settings.endByte}, ToState: 6, ActionCode: LineReceived, Scan: false},
 		utilities.Rule{FromState: 3, Symbols: utilities.PrintableChars8Bit, ToState: 3, Scan: true},
@@ -184,26 +200,41 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 					p.receiveQ <- protocolMsg
 					p.receiveThreadIsRunning = false
 					return
+				case RequestStart:
+					p.state.isRequest = true
 				case LineReceived:
 					// append Data
 					lastMessage = messageBuffer
-					fileBuffer = append(fileBuffer, lastMessage)
-					fsm.ResetBuffer()
-				case utilities.Finish:
-					// send fileData
-					fullMsg := make([]byte, 0)
-					for i, messageLine := range fileBuffer {
-						// skip first element because this is only RecordType + unitNo not needed in instrumentAPI
-						if i == 0 || len(messageLine) == 4 {
-							continue
+					if p.state.isRequest && len(messageBuffer) > 5 { // 5 Because if a bcc is set than its bigger than 4
+						// Request logic
+						p.receiveQ <- protocolMessage{
+							Status: DATA,
+							Data:   messageBuffer,
 						}
-						fullMsg = append(fullMsg, messageLine...)
-						fullMsg = append(fullMsg, p.settings.lineBreak)
+					} else if !p.state.isRequest {
+						fileBuffer = append(fileBuffer, lastMessage)
 					}
 
-					p.receiveQ <- protocolMessage{
-						Status: DATA,
-						Data:   fullMsg,
+					fsm.ResetBuffer()
+				case utilities.Finish:
+					// send fileData if not request
+					if p.state.isRequest {
+						p.state.isRequest = false
+					} else {
+						fullMsg := make([]byte, 0)
+						for _, messageLine := range fileBuffer {
+							// skip first element because this is only RecordType + unitNo not needed in instrumentAPI
+							if len(messageLine) == 4 {
+								continue
+							}
+							fullMsg = append(fullMsg, messageLine...)
+							fullMsg = append(fullMsg, p.settings.lineBreak)
+						}
+
+						p.receiveQ <- protocolMessage{
+							Status: DATA,
+							Data:   fullMsg,
+						}
 					}
 					fsm.ResetBuffer()
 					fsm.Init()
@@ -247,9 +278,13 @@ func (p *beckmanSpecialProtocol) Send(conn net.Conn, data [][]byte) (int, error)
 
 	// Maybe need to wait until the answer of the instrument
 	for _, buff := range data {
-		msgBuff = append(msgBuff, p.settings.startByte)
-		msgBuff = append(msgBuff, buff...)
-		msgBuff = append(msgBuff, p.settings.endByte)
+		if len(buff) > 1 {
+			msgBuff = append(msgBuff, p.settings.startByte)
+			msgBuff = append(msgBuff, buff...)
+			msgBuff = append(msgBuff, p.settings.endByte)
+		} else {
+			msgBuff = append(msgBuff, buff...)
+		}
 	}
 
 	return conn.Write(msgBuff)
