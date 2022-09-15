@@ -87,7 +87,8 @@ func BeckmanSpecialProtocol(settings ...*BeckmanSpecialProtocolSettings) Impleme
 }
 
 const (
-	RequestStart utilities.ActionCode = "RequestStart"
+	RequestStart          utilities.ActionCode = "RequestStart"
+	RetransmitLastMessage utilities.ActionCode = "RetransmitLastMessage"
 )
 
 func (p *beckmanSpecialProtocol) Interrupt() {
@@ -111,7 +112,8 @@ func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
 		utilities.Rule{FromState: 11, Symbols: utilities.PrintableChars8Bit, ToState: 11, Scan: true},
 		utilities.Rule{FromState: 12, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 13, Scan: false},
 		utilities.Rule{FromState: 13, Symbols: []byte{p.settings.startByte}, ToState: 1, Scan: false},
-		utilities.Rule{FromState: 13, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 13, Scan: false},
+		utilities.Rule{FromState: 13, Symbols: []byte{utilities.NAK}, ToState: 13, ActionCode: RetransmitLastMessage, Scan: false},
+		utilities.Rule{FromState: 13, Symbols: []byte{utilities.ACK}, ToState: 13, Scan: false},
 
 		utilities.Rule{FromState: 14, Symbols: []byte{p.settings.endByte}, ToState: 13, ActionCode: LineReceived, Scan: false},
 		utilities.Rule{FromState: 14, Symbols: utilities.PrintableChars8Bit, ToState: 14, Scan: true},
@@ -221,6 +223,11 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 					}
 
 					fsm.ResetBuffer()
+				case RetransmitLastMessage:
+					p.receiveQ <- protocolMessage{
+						Status: DATA,
+						Data:   lastMessage,
+					}
 				case utilities.Finish:
 					// send fileData if not request
 					if p.state.isRequest {
