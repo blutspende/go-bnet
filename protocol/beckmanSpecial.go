@@ -104,9 +104,9 @@ func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
 		utilities.Rule{FromState: 1, Symbols: []byte{'D', 'S', 'd'}, ToState: 2, Scan: true},
 		utilities.Rule{FromState: 1, Symbols: []byte{'R'}, ToState: 10, Scan: true},
 
-		utilities.Rule{FromState: 10, Symbols: []byte{'B'}, ToState: 14, ActionCode: RequestStart, Scan: true},
+		utilities.Rule{FromState: 10, Symbols: []byte{'B'}, ToState: 14, ActionCode: JustAck, Scan: true},
 		utilities.Rule{FromState: 10, Symbols: []byte{'E'}, ToState: 7, Scan: true},
-		utilities.Rule{FromState: 10, Symbols: printableChars8BitWithoutE, ToState: 11, Scan: true},
+		utilities.Rule{FromState: 10, Symbols: printableChars8BitWithoutE, ToState: 11, ActionCode: RequestStart, Scan: true},
 		utilities.Rule{FromState: 11, Symbols: []byte{p.settings.endByte}, ToState: 12, ActionCode: LineReceived, Scan: false},
 		utilities.Rule{FromState: 11, Symbols: utilities.PrintableChars8Bit, ToState: 11, Scan: true},
 		utilities.Rule{FromState: 12, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 13, Scan: false},
@@ -206,7 +206,6 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 					return
 				case RequestStart:
 					p.state.isRequest = true
-					conn.Write([]byte{utilities.ACK})
 				case LineReceived:
 					// append Data
 					lastMessage = messageBuffer
@@ -229,7 +228,7 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 						fullMsg := make([]byte, 0)
 						for _, messageLine := range fileBuffer {
 							// skip first element because this is only RecordType + unitNo not needed in instrumentAPI
-							if len(messageLine) == 4 {
+							if len(messageLine) <= 5 {
 								continue
 							}
 							fullMsg = append(fullMsg, messageLine...)
