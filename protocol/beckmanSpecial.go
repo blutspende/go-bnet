@@ -113,7 +113,7 @@ func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
 		utilities.Rule{FromState: 13, Symbols: []byte{p.settings.startByte}, ToState: 1, Scan: false},
 		utilities.Rule{FromState: 13, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 13, Scan: false},
 
-		utilities.Rule{FromState: 14, Symbols: []byte{p.settings.endByte}, ToState: 13, ActionCode: JustAck, Scan: false},
+		utilities.Rule{FromState: 14, Symbols: []byte{p.settings.endByte}, ToState: 13, ActionCode: LineReceived, Scan: false},
 		utilities.Rule{FromState: 14, Symbols: utilities.PrintableChars8Bit, ToState: 14, Scan: true},
 
 		utilities.Rule{FromState: 2, Symbols: printableChars8BitWithoutE, ToState: 3, Scan: true},
@@ -206,6 +206,7 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 					return
 				case RequestStart:
 					p.state.isRequest = true
+					conn.Write([]byte{utilities.ACK})
 				case LineReceived:
 					// append Data
 					lastMessage = messageBuffer
