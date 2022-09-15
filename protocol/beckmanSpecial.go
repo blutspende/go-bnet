@@ -104,22 +104,23 @@ func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
 		utilities.Rule{FromState: 1, Symbols: []byte{'D', 'S', 'd'}, ToState: 2, Scan: true},
 		utilities.Rule{FromState: 1, Symbols: []byte{'R'}, ToState: 10, Scan: true},
 
-		utilities.Rule{FromState: 10, Symbols: []byte{'B', 'E'}, ToState: 13, ActionCode: RequestStart, Scan: true},
+		utilities.Rule{FromState: 10, Symbols: []byte{'B'}, ToState: 14, ActionCode: RequestStart, Scan: true},
+		utilities.Rule{FromState: 10, Symbols: []byte{'E'}, ToState: 7, Scan: true},
 		utilities.Rule{FromState: 10, Symbols: printableChars8BitWithoutE, ToState: 11, Scan: true},
 		utilities.Rule{FromState: 11, Symbols: []byte{p.settings.endByte}, ToState: 12, ActionCode: LineReceived, Scan: false},
 		utilities.Rule{FromState: 11, Symbols: utilities.PrintableChars8Bit, ToState: 11, Scan: true},
-		utilities.Rule{FromState: 12, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 14, Scan: false},
+		utilities.Rule{FromState: 12, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 13, Scan: false},
+		utilities.Rule{FromState: 13, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 5, Scan: false},
 
-		utilities.Rule{FromState: 14, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 6, Scan: false},
-
-		utilities.Rule{FromState: 13, Symbols: []byte{p.settings.endByte}, ToState: 6, ActionCode: LineReceived, Scan: false},
-		utilities.Rule{FromState: 13, Symbols: utilities.PrintableChars8Bit, ToState: 13, Scan: true},
+		utilities.Rule{FromState: 14, Symbols: []byte{p.settings.endByte}, ToState: 13, Scan: false},
+		utilities.Rule{FromState: 14, Symbols: utilities.PrintableChars8Bit, ToState: 14, Scan: true},
 
 		utilities.Rule{FromState: 2, Symbols: printableChars8BitWithoutE, ToState: 3, Scan: true},
-		utilities.Rule{FromState: 3, Symbols: []byte{p.settings.endByte}, ToState: 6, ActionCode: LineReceived, Scan: false},
+		utilities.Rule{FromState: 3, Symbols: []byte{p.settings.endByte}, ToState: 5, ActionCode: LineReceived, Scan: false},
 		utilities.Rule{FromState: 3, Symbols: utilities.PrintableChars8Bit, ToState: 3, Scan: true},
-		//utilities.Rule{FromState: 5, Symbols: utilities.PrintableChars8Bit, ToState: 6, ActionCode: utilities.CheckSum, Scan: true},
-		utilities.Rule{FromState: 6, Symbols: []byte{p.settings.startByte}, ToState: 1, ActionCode: JustAck, Scan: false},
+
+		//utilities.Rule{FromState:4 , Symbols: utilities.PrintableChars8Bit, ToState: 5, ActionCode: utilities.CheckSum, Scan: true},
+		utilities.Rule{FromState: 5, Symbols: []byte{p.settings.startByte}, ToState: 1, ActionCode: JustAck, Scan: false},
 
 		utilities.Rule{FromState: 2, Symbols: []byte{'E'}, ToState: 7, Scan: true},
 		utilities.Rule{FromState: 7, Symbols: []byte{p.settings.endByte}, ToState: 0, ActionCode: utilities.Finish, Scan: false},
