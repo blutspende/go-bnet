@@ -104,11 +104,13 @@ func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
 		utilities.Rule{FromState: 1, Symbols: []byte{'D', 'S', 'd'}, ToState: 2, Scan: true},
 		utilities.Rule{FromState: 1, Symbols: []byte{'R'}, ToState: 10, Scan: true},
 
-		utilities.Rule{FromState: 10, Symbols: []byte{'B'}, ToState: 13, ActionCode: RequestStart, Scan: true},
+		utilities.Rule{FromState: 10, Symbols: []byte{'B', 'E'}, ToState: 13, ActionCode: RequestStart, Scan: true},
 		utilities.Rule{FromState: 10, Symbols: printableChars8BitWithoutE, ToState: 11, Scan: true},
 		utilities.Rule{FromState: 11, Symbols: []byte{p.settings.endByte}, ToState: 12, ActionCode: LineReceived, Scan: false},
 		utilities.Rule{FromState: 11, Symbols: utilities.PrintableChars8Bit, ToState: 11, Scan: true},
-		utilities.Rule{FromState: 12, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 6, Scan: true},
+		utilities.Rule{FromState: 12, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 14, Scan: false},
+
+		utilities.Rule{FromState: 14, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 6, Scan: false},
 
 		utilities.Rule{FromState: 13, Symbols: []byte{p.settings.endByte}, ToState: 6, ActionCode: LineReceived, Scan: false},
 		utilities.Rule{FromState: 13, Symbols: utilities.PrintableChars8Bit, ToState: 13, Scan: true},
