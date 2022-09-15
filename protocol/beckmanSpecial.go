@@ -110,9 +110,10 @@ func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
 		utilities.Rule{FromState: 11, Symbols: []byte{p.settings.endByte}, ToState: 12, ActionCode: LineReceived, Scan: false},
 		utilities.Rule{FromState: 11, Symbols: utilities.PrintableChars8Bit, ToState: 11, Scan: true},
 		utilities.Rule{FromState: 12, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 13, Scan: false},
-		utilities.Rule{FromState: 13, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 5, Scan: false},
+		utilities.Rule{FromState: 13, Symbols: []byte{p.settings.startByte}, ToState: 1, Scan: false},
+		utilities.Rule{FromState: 13, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 13, Scan: false},
 
-		utilities.Rule{FromState: 14, Symbols: []byte{p.settings.endByte}, ToState: 13, Scan: false},
+		utilities.Rule{FromState: 14, Symbols: []byte{p.settings.endByte}, ToState: 13, ActionCode: JustAck, Scan: false},
 		utilities.Rule{FromState: 14, Symbols: utilities.PrintableChars8Bit, ToState: 14, Scan: true},
 
 		utilities.Rule{FromState: 2, Symbols: printableChars8BitWithoutE, ToState: 3, Scan: true},
