@@ -247,6 +247,7 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 							Data:   fullMsg,
 						}
 					}
+					fileBuffer = make([][]byte, 0)
 					fsm.ResetBuffer()
 					fsm.Init()
 				case JustAck:
