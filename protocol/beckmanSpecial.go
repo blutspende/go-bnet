@@ -14,6 +14,8 @@ type BeckmanSpecialProtocolSettings struct {
 	startByte                byte
 	endByte                  byte
 	lineBreak                byte
+	acknowledgementTimeout   time.Duration
+	realTimeDataTransmission bool
 }
 
 func (s BeckmanSpecialProtocolSettings) SetLineBreakByte(lineBreak byte) *BeckmanSpecialProtocolSettings {
@@ -46,6 +48,23 @@ func (s BeckmanSpecialProtocolSettings) DisableChecksumValidation() *BeckmanSpec
 	return &s
 }
 
+// SetAcknowledgementTimeout should be between 0.5ms to max 2s
+// Default is 0
+func (s BeckmanSpecialProtocolSettings) SetAcknowledgementTimeout(duration time.Duration) *BeckmanSpecialProtocolSettings {
+	s.acknowledgementTimeout = duration
+	return &s
+}
+
+func (s BeckmanSpecialProtocolSettings) EnableRealTimeDataTransmission() *BeckmanSpecialProtocolSettings {
+	s.realTimeDataTransmission = true
+	return &s
+}
+
+func (s BeckmanSpecialProtocolSettings) DisableRealTimeDataTransmission() *BeckmanSpecialProtocolSettings {
+	s.realTimeDataTransmission = false
+	return &s
+}
+
 func DefaultBeckmanSpecialProtocolSettings() *BeckmanSpecialProtocolSettings {
 	return &BeckmanSpecialProtocolSettings{
 		strictChecksumValidation: false,
@@ -53,6 +72,8 @@ func DefaultBeckmanSpecialProtocolSettings() *BeckmanSpecialProtocolSettings {
 		startByte:                utilities.STX,
 		endByte:                  utilities.ETX,
 		lineBreak:                utilities.CR,
+		acknowledgementTimeout:   time.Millisecond * 0,
+		realTimeDataTransmission: false,
 	}
 }
 
@@ -218,7 +239,14 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 							Data:   messageBuffer,
 						}
 					} else if !p.state.isRequest {
-						fileBuffer = append(fileBuffer, lastMessage)
+						if p.settings.realTimeDataTransmission {
+							p.receiveQ <- protocolMessage{
+								Status: DATA,
+								Data:   messageBuffer,
+							}
+						} else {
+							fileBuffer = append(fileBuffer, lastMessage)
+						}
 					}
 
 					fsm.ResetBuffer()
@@ -242,15 +270,21 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 							fullMsg = append(fullMsg, p.settings.lineBreak)
 						}
 
-						p.receiveQ <- protocolMessage{
-							Status: DATA,
-							Data:   fullMsg,
+						// Send only if data are set
+						if len(fullMsg) > 0 {
+							p.receiveQ <- protocolMessage{
+								Status: DATA,
+								Data:   fullMsg,
+							}
 						}
 					}
 					fileBuffer = make([][]byte, 0)
 					fsm.ResetBuffer()
 					fsm.Init()
 				case JustAck:
+					if p.settings.acknowledgementTimeout > 0 {
+						time.Sleep(p.settings.acknowledgementTimeout)
+					}
 					conn.Write([]byte{utilities.ACK})
 				default:
 					protocolMsg := protocolMessage{
@@ -260,7 +294,7 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 
 					p.receiveQ <- protocolMsg
 					p.receiveThreadIsRunning = false
-					fmt.Println("Disconnect due to unexpected, unkown and unlikley error")
+					fmt.Println("Disconnect due to unexpected, unknown and unlikely error")
 					return
 				}
 			}
