@@ -306,6 +306,8 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 					// TODO: reinitialize FSM would be sufficient
 					//proto.receiveThreadIsRunning = false
 					//return
+					fileBuffer = make([][]byte, 0)
+					fsm.ResetBuffer()
 					fsm.Init()
 				case JustAck:
 					conn.Write([]byte{utilities.ACK})
