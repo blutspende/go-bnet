@@ -436,8 +436,9 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 		if os.Getenv("BNETDEBUG") == "true" {
 			fmt.Printf("bnet.Send - Start transferring\n")
 		}
+
 		// 8.3 - Transfer Phase
-		maxLengthOfFrame := 63993
+		//maxLengthOfFrame := 63993
 		frameNumber := 1
 		bytesTransferred := 0
 		var checksum []byte
@@ -450,106 +451,112 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 			// TODO: this implementation is wrong:
 			//   The number of written bytes (including checksum etc ) must be counted and at
 			//   63993 bytes the EOB must be send
-			if len(frame) > maxLengthOfFrame {
+			/*
+				if len(frame) > maxLengthOfFrame {
 
-				iterations := len(frame) / maxLengthOfFrame
-				if (iterations * maxLengthOfFrame) < len(frame) {
-					iterations++
-				}
-
-				// take first 63993 bytes for each run
-				for i := 0; i < iterations; i++ {
-					copiedFrame := make([]byte, len(frame)+1)
-					copy(copiedFrame, []byte(strconv.Itoa(frameNumber)))
-					copy(copiedFrame[1:], frame)
-
-					subPartOfFrame := copiedFrame[iterations*maxLengthOfFrame:]
-					// If the last iteration of this frame send ETX
-					usedEndByte := []byte{utilities.ETB}
-					if i >= iterations {
-						usedEndByte = []byte{utilities.ETX}
+					iterations := len(frame) / maxLengthOfFrame
+					if (iterations * maxLengthOfFrame) < len(frame) {
+						iterations++
 					}
 
-					checksum = computeChecksum([]byte{}, subPartOfFrame, usedEndByte) //  frameNumber is an empty []of bytes because it's already set to
-					_, err = conn.Write([]byte{utilities.STX})
-					if err != nil {
-						return -1, err
+					// take first 63993 bytes for each run
+					for i := 0; i < iterations; i++ {
+						copiedFrame := make([]byte, len(frame)+1)
+						copy(copiedFrame, []byte(strconv.Itoa(frameNumber)))
+						copy(copiedFrame[1:], frame)
+
+						subPartOfFrame := copiedFrame[iterations*maxLengthOfFrame:]
+						// If the last iteration of this frame send ETX
+						usedEndByte := []byte{utilities.ETB}
+						if i >= iterations {
+							usedEndByte = []byte{utilities.ETX}
+						}
+
+						checksum = computeChecksum([]byte{}, subPartOfFrame, usedEndByte) //  frameNumber is an empty []of bytes because it's already set to
+						_, err = conn.Write([]byte{utilities.STX})
+						if err != nil {
+							return -1, err
+						}
+
+						_, err = conn.Write(subPartOfFrame)
+						if err != nil {
+							return -1, err
+						}
+
+						_, err = conn.Write(usedEndByte)
+						if err != nil {
+							return -1, err
+						}
+						_, err = conn.Write(checksum)
+						if err != nil {
+							return -1, err
+						}
+
+						_, err = conn.Write([]byte{utilities.CR, utilities.LF})
+						if err != nil {
+							return -1, err
+						}
+
+						receivedMsg, err := proto.receiveSendAnswer(conn)
+						if err != nil {
+							return 0, err
+						}
+
+						switch receivedMsg {
+						case utilities.ACK:
+							// was successfully do next
+							bytesTransferred += len(subPartOfFrame)
+							bytesTransferred += len(checksum)
+							bytesTransferred += 3 // cr, lf stx and endByte
+						case utilities.NAK:
+							// Last was not successfully do next
+						case utilities.EOT:
+							// Cancel after that one
+							bytesTransferred += len(subPartOfFrame)
+							bytesTransferred += len(checksum)
+							bytesTransferred += 3 // cr, lf stx and endByte
+							return bytesTransferred, nil
+						default:
+							return 0, ReceivedMessageIsInvalid
+						}
+
+						frameNumber = updateFrameNumber(frameNumber)
 					}
+				} else {
+			*/
+			if os.Getenv("BNETDEBUG") == "true" {
+				fmt.Printf("bnet.Send Sending frame\n")
+			}
 
-					_, err = conn.Write(subPartOfFrame)
-					if err != nil {
-						return -1, err
-					}
+			// If frame-numbers are used, then here ;)
+			frameStr := ""
+			if proto.settings.expectFrameNumbers {
+				frameStr = fmt.Sprintf("%d", frameNumber)
+			}
 
-					_, err = conn.Write(usedEndByte)
-					if err != nil {
-						return -1, err
-					}
-					_, err = conn.Write(checksum)
-					if err != nil {
-						return -1, err
-					}
+			checksum = computeChecksum([]byte(frameStr), frame, []byte{utilities.ETX}) //  frameNumber is an empty [] of bytes because it's already set to
+			_, err = conn.Write([]byte{utilities.STX})
+			if err != nil {
+				return -1, err
+			}
 
-					_, err = conn.Write([]byte{utilities.CR, utilities.LF})
-					if err != nil {
-						return -1, err
-					}
+			_, err = conn.Write(append([]byte(frameStr), frame...))
+			if err != nil {
+				return -1, err
+			}
 
-					receivedMsg, err := proto.receiveSendAnswer(conn)
-					if err != nil {
-						return 0, err
-					}
+			_, err = conn.Write([]byte{utilities.ETX})
+			if err != nil {
+				return -1, err
+			}
+			_, err = conn.Write(checksum)
+			if err != nil {
+				return -1, err
+			}
 
-					switch receivedMsg {
-					case utilities.ACK:
-						// was successfully do next
-						bytesTransferred += len(subPartOfFrame)
-						bytesTransferred += len(checksum)
-						bytesTransferred += 3 // cr, lf stx and endByte
-					case utilities.NAK:
-						// Last was not successfully do next
-					case utilities.EOT:
-						// Cancel after that one
-						bytesTransferred += len(subPartOfFrame)
-						bytesTransferred += len(checksum)
-						bytesTransferred += 3 // cr, lf stx and endByte
-						return bytesTransferred, nil
-					default:
-						return 0, ReceivedMessageIsInvalid
-					}
-
-					frameNumber = updateFrameNumber(frameNumber)
-				}
-			} else {
-
-				if os.Getenv("BNETDEBUG") == "true" {
-					fmt.Printf("bnet.Send Sending frame\n")
-				}
-
-				checksum = computeChecksum([]byte{}, frame, []byte{utilities.ETX}) //  frameNumber is an empty [] of bytes because it's already set to
-				_, err = conn.Write([]byte{utilities.STX})
-				if err != nil {
-					return -1, err
-				}
-
-				_, err = conn.Write(frame)
-				if err != nil {
-					return -1, err
-				}
-
-				_, err = conn.Write([]byte{utilities.ETX})
-				if err != nil {
-					return -1, err
-				}
-				_, err = conn.Write(checksum)
-				if err != nil {
-					return -1, err
-				}
-
-				_, err = conn.Write([]byte{utilities.CR, utilities.LF})
-				if err != nil {
-					return -1, err
-				}
+			_, err = conn.Write([]byte{utilities.CR, utilities.LF})
+			if err != nil {
+				return -1, err
 			}
 
 			receivedMsg, err := proto.receiveSendAnswer(conn)
@@ -562,7 +569,8 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 				bytesTransferred += len(frame)
 				bytesTransferred += len(checksum)
 				bytesTransferred += 3 // cr, lf stx and endByte
-				continue              // was successfully do next
+				frameNumber = incrementFrameNumberModulo7(frameNumber)
+				continue // was successfully do next
 			case utilities.NAK:
 				continue // Last was not successfully do next
 			case utilities.EOT:
@@ -577,7 +585,7 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 
 				return 0, ReceivedMessageIsInvalid
 			}
-			frameNumber = updateFrameNumber(frameNumber)
+
 		}
 
 		conn.Write([]byte{utilities.EOT})
@@ -590,12 +598,8 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 	}
 }
 
-func updateFrameNumber(frameNumber int) int {
-	if (frameNumber % 7) == 0 {
-		return 0
-	}
-	frameNumber++
-	return frameNumber
+func incrementFrameNumberModulo7(frameNumber int) int {
+	return (frameNumber + 1) % 7
 }
 
 func (proto *lis1A1) receiveSendAnswer(conn net.Conn) (byte, error) {
