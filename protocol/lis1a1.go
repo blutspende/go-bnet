@@ -388,6 +388,7 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 
 	conn.SetReadDeadline(time.Now())
 	proto.asyncReadActive.Wait()
+	conn.SetReadDeadline(time.Time{}) // Reset timeline
 
 	if recursionDepth > 10 {
 		return -1, fmt.Errorf("the receiver does not accept any data")
@@ -583,6 +584,7 @@ func (proto *lis1A1) receiveSendAnswer(conn net.Conn) (byte, error) {
 
 	receivingMsg := make([]byte, 1)
 	_, err = conn.Read(receivingMsg)
+
 	if err != nil {
 		return 0, err
 	}
