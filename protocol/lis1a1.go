@@ -396,7 +396,7 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 		if n == 1 {
 			switch recievingMsg[0] {
 			case utilities.ACK: // 8.2.5
-				break // continue operation
+				//  continue operation
 			case utilities.NAK: // 8.2.6
 				return -1, fmt.Errorf("instrument(lis1a1) did not accept any data")
 			case utilities.ENQ: // 8.2.7.1, 2
