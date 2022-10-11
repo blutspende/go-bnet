@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 	"regexp"
 	"strconv"
 	"time"
@@ -379,8 +380,12 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 			return -1, ReceiverDoesNotRespond
 		}
 
-		receivingMsg := make([]byte, 1)
-		n, err := conn.Read(receivingMsg)
+		recievingMsg := make([]byte, 1)
+		n, err := conn.Read(recievingMsg)
+		if os.Getenv("BNETDEBUG") == "true" {
+			fmt.Printf("bnet.Send Received %v (%d bytes)\n", recievingMsg, n)
+		}
+
 		if err != nil {
 			return n, err
 		}
@@ -389,7 +394,7 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 		}
 
 		if n == 1 {
-			switch receivingMsg[0] {
+			switch recievingMsg[0] {
 			case utilities.ACK: // 8.2.5
 				break // continue operation
 			case utilities.NAK: // 8.2.6
@@ -398,11 +403,14 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 				time.Sleep(time.Second)
 				return proto.send(conn, data, recursionDepth+1)
 			default:
-				log.Printf("Warning: Recieved unexpected bytes in transmission (ignoring them) : %c ascii: %d\n", receivingMsg[0], receivingMsg[0])
+				log.Printf("Warning: Recieved unexpected bytes in transmission (ignoring them) : %c ascii: %d\n", recievingMsg[0], recievingMsg[0])
 				continue // ignore all characters until ACK / 8.2.5
 			}
 		}
 
+		if os.Getenv("BNETDEBUG") == "true" {
+			fmt.Printf("bnet.Send - Start transferring\n")
+		}
 		// 8.3 - Transfer Phase
 		maxLengthOfFrame := 63993
 		frameNumber := 1
