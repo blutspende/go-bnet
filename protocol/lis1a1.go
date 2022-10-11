@@ -209,6 +209,9 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 			//TODO: NO timeout when in status Init
 			// conn.SetReadDeadline(time.Now().Add(time.Second * 15))
 			n, err := conn.Read(tcpReceiveBuffer)
+			if os.Getenv("BNETDEBUG") == "true" {
+				fmt.Printf("bnet.lisa1.Recieve Received %v (%d bytes)\n", tcpReceiveBuffer, n)
+			}
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
 					fsm.Init()
