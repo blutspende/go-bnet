@@ -191,7 +191,7 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 	}
 
 	go func() {
-		fmt.Println("Start Receiving Thread")
+		// fmt.Println("Start Receiving Thread")
 		proto.receiveThreadIsRunning = true
 
 		proto.state.State = 0 // initial state for FSM
@@ -382,6 +382,9 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 		n, err := conn.Read(receivingMsg)
 		if err != nil {
 			return n, err
+		}
+		if n == 0 {
+			return n, fmt.Errorf("No data from socket, abort")
 		}
 
 		if n == 1 {
