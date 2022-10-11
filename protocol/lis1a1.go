@@ -9,6 +9,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
@@ -109,6 +110,14 @@ type lis1A1 struct {
 	receiveQ               chan protocolMessage
 	receiveThreadIsRunning bool
 	state                  ProcessState
+
+	// The waitgroups are used as latches since the read-goroutine
+	// is async to sending. When sending, the readroutine must be
+	// stopped and sending can not start before that has happened.
+	// the read-routine can only continue after sending is completeley
+	// finished.
+	asyncReadActive sync.WaitGroup
+	asyncSendActive sync.WaitGroup
 }
 
 func DefaultLis1A1ProtocolSettings() *Lis1A1ProtocolSettings {
@@ -133,6 +142,8 @@ func Lis1A1Protocol(settings ...*Lis1A1ProtocolSettings) Implementation {
 		settings:               theSettings,
 		receiveQ:               make(chan protocolMessage),
 		receiveThreadIsRunning: false,
+		asyncReadActive:        sync.WaitGroup{},
+		asyncSendActive:        sync.WaitGroup{},
 	}
 }
 
@@ -208,9 +219,13 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 		for {
 			//TODO: NO timeout when in status Init
 			// conn.SetReadDeadline(time.Now().Add(time.Second * 15))
+
+			proto.asyncSendActive.Wait()
+			proto.asyncReadActive.Add(1)
 			n, err := conn.Read(tcpReceiveBuffer)
+			proto.asyncReadActive.Done()
 			if os.Getenv("BNETDEBUG") == "true" {
-				fmt.Printf("bnet.lisa1.Recieve Received %v (%d bytes)\n", tcpReceiveBuffer, n)
+				fmt.Printf("bnet.lisa1.Recieve Received %v (%d bytes)\n", tcpReceiveBuffer[:n], n)
 			}
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
@@ -368,6 +383,13 @@ func (proto *lis1A1) Interrupt() {
 
 // https://wiki.bloodlab.org/lib/exe/fetch.php?media=listnode:lis1-a.pdf
 func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int, error) {
+
+	proto.asyncSendActive.Add(1)
+	defer proto.asyncSendActive.Done()
+
+	conn.SetReadDeadline(time.Now())
+	proto.asyncReadActive.Wait()
+
 	if recursionDepth > 10 {
 		return -1, fmt.Errorf("the receiver does not accept any data")
 	}
