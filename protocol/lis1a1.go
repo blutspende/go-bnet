@@ -442,6 +442,14 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 		bytesTransferred := 0
 		var checksum []byte
 		for _, frame := range data {
+
+			if os.Getenv("BNETDEBUG") == "true" {
+				fmt.Printf("bnet.Send Transmit frame '%s'\n", string(frame))
+			}
+
+			// TODO: this implementation is wrong:
+			//   The number of written bytes (including checksum etc ) must be counted and at
+			//   63993 bytes the EOB must be send
 			if len(frame) > maxLengthOfFrame {
 
 				iterations := len(frame) / maxLengthOfFrame
@@ -513,6 +521,11 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 					frameNumber = updateFrameNumber(frameNumber)
 				}
 			} else {
+
+				if os.Getenv("BNETDEBUG") == "true" {
+					fmt.Printf("bnet.Send Sending frame\n")
+				}
+
 				checksum = computeChecksum([]byte{}, frame, []byte{utilities.ETX}) //  frameNumber is an empty [] of bytes because it's already set to
 				_, err = conn.Write([]byte{utilities.STX})
 				if err != nil {
@@ -558,12 +571,21 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 				bytesTransferred += 3        // cr, lf stx and endByte
 				return bytesTransferred, nil // Cancel after that one
 			default:
+				if os.Getenv("BNETDEBUG") == "true" {
+					fmt.Printf("bnet.Send Exit due to invalid Message: '%v' \n", receivedMsg)
+				}
+
 				return 0, ReceivedMessageIsInvalid
 			}
 			frameNumber = updateFrameNumber(frameNumber)
 		}
 
 		conn.Write([]byte{utilities.EOT})
+
+		if os.Getenv("BNETDEBUG") == "true" {
+			fmt.Printf("bnet.Send Transmission sucessfully completed\n")
+		}
+
 		return bytesTransferred, nil
 	}
 }
@@ -583,7 +605,10 @@ func (proto *lis1A1) receiveSendAnswer(conn net.Conn) (byte, error) {
 	}
 
 	receivingMsg := make([]byte, 1)
-	_, err = conn.Read(receivingMsg)
+	n, err := conn.Read(receivingMsg)
+	if os.Getenv("BNETDEBUG") == "true" {
+		fmt.Printf("bnet.Send recieveSendAnswer: read %d bytes : %s\n", n, receivingMsg[:n])
+	}
 
 	if err != nil {
 		return 0, err
