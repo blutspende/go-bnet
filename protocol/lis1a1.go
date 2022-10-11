@@ -438,7 +438,7 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 		}
 
 		// 8.3 - Transfer Phase
-		maxLengthOfFrame := 63993
+		//maxLengthOfFrame := 63993
 		frameNumber := 1
 		bytesTransferred := 0
 		var checksum []byte
