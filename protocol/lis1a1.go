@@ -217,8 +217,7 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 		// init state machine
 		fsm := utilities.CreateFSM(Rules)
 		for {
-			//TODO: NO timeout when in status Init
-			// conn.SetReadDeadline(time.Now().Add(time.Second * 15))
+			conn.SetReadDeadline(time.Time{}) // NO timeout ever
 
 			proto.asyncSendActive.Wait()
 			proto.asyncReadActive.Add(1)
