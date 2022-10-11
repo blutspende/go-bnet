@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"regexp"
 	"strconv"
@@ -384,7 +385,7 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 			return n, err
 		}
 		if n == 0 {
-			return n, fmt.Errorf("No data from socket, abort")
+			return n, fmt.Errorf("no data from socket, abort")
 		}
 
 		if n == 1 {
@@ -397,6 +398,7 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 				time.Sleep(time.Second)
 				return proto.send(conn, data, recursionDepth+1)
 			default:
+				log.Printf("Warning: Recieved unexpected bytes in transmission (ignoring them) : %c ascii: %d\n", receivingMsg[0], receivingMsg[0])
 				continue // ignore all characters until ACK / 8.2.5
 			}
 		}
