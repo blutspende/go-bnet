@@ -61,7 +61,7 @@ func (s *fsm) Push(token byte) ([]byte, ActionCode, error) {
 
 	rule, err := s.findMatchingRule(token)
 
-	if os.Getenv("BNETDEBUG") == "true" {
+	if os.Getenv("BNETDEBUG") == "lis1a1" {
 		fmt.Printf(" FSM from %d to %d with token'%s' (rule:%#v)\n", s.currentState, rule.ToState, string(token), rule)
 	}
 
