@@ -329,6 +329,9 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 					fsm.ResetBuffer()
 					fsm.Init()
 				case JustAck:
+					if os.Getenv("BNETDEBUG") == "true" {
+						fmt.Printf("bnet.lisa1.Recieve Sending 'just ack'\n")
+					}
 					conn.Write([]byte{utilities.ACK})
 				case FrameNumber:
 					if proto.settings.strictFrameOrder && string(ascii) != strconv.Itoa(nextExpectedFrameNumber) {
