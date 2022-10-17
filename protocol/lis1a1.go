@@ -221,6 +221,7 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 
 			proto.asyncSendActive.Wait()
 			proto.asyncReadActive.Add(1)
+			conn.SetDeadline(time.Now().Add(time.Second * 30))
 			n, err := conn.Read(tcpReceiveBuffer)
 			proto.asyncReadActive.Done()
 			if os.Getenv("BNETDEBUG") == "true" {
@@ -332,6 +333,7 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 					if os.Getenv("BNETDEBUG") == "true" {
 						fmt.Printf("bnet.lisa1.Recieve Sending 'just ack'\n")
 					}
+					conn.SetDeadline(time.Time{})
 					bytes, err := conn.Write([]byte{utilities.ACK})
 					if bytes != 1 {
 						if os.Getenv("BNETDEBUG") == "true" {
@@ -351,6 +353,7 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 							Status: ERROR,
 							Data:   []byte(fmt.Sprintf("invalid Frame number. currentFrameNumber: %s expectedFrameNumber: %s", string(ascii), strconv.Itoa(nextExpectedFrameNumber))),
 						}
+						conn.SetDeadline(time.Time{})
 						_, err = conn.Write([]byte{utilities.NAK})
 						if err != nil {
 							protocolMsg.Data = append(protocolMsg.Data, []byte(err.Error())...)
@@ -376,6 +379,7 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 						Data:   []byte("Invalid action code "),
 					}
 
+					conn.SetDeadline(time.Time{})
 					_, err = conn.Write([]byte{utilities.NAK})
 					if err != nil {
 						protocolMsg.Data = append(protocolMsg.Data, []byte(err.Error())...)
