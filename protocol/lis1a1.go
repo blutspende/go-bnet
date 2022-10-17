@@ -332,7 +332,18 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 					if os.Getenv("BNETDEBUG") == "true" {
 						fmt.Printf("bnet.lisa1.Recieve Sending 'just ack'\n")
 					}
-					conn.Write([]byte{utilities.ACK})
+					bytes, err := conn.Write([]byte{utilities.ACK})
+					if bytes != 1 {
+						if os.Getenv("BNETDEBUG") == "true" {
+							fmt.Printf("bnet.lisa1.Recieve (error) faled to send 1 byte (ACK'just ack') - ignore\n")
+						}
+					}
+					if err != nil {
+						if os.Getenv("BNETDEBUG") == "true" {
+							fmt.Printf("bnet.lisa1.Recieve error sending 'just ack' %s\n", err.Error())
+						}
+						fsm.Init()
+					}
 				case FrameNumber:
 					if proto.settings.strictFrameOrder && string(ascii) != strconv.Itoa(nextExpectedFrameNumber) {
 						// Check valid frame number
