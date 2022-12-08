@@ -170,12 +170,27 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 		fileBuffer := make([][]byte, 0)
 
 		fsm := utilities.CreateFSM(p.generateRules())
-
 		for {
+			err := conn.SetReadDeadline(time.Now().Add(time.Second * 60))
+			if err != nil {
+				fmt.Printf(`should not happen: %s`, err.Error())
+				p.receiveThreadIsRunning = false
+				p.receiveQ <- protocolMessage{
+					Status: DISCONNECT,
+					Data:   []byte(err.Error()),
+				}
+				return
+			}
+
 			n, err := conn.Read(tcpReceiveBuffer)
 			// enabled FSM
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
+					if os.Getenv("BNETDEBUG") == "true" {
+						fmt.Printf(`timeout reached to read data from connection. Resetting fsm to init and reset current buffer.
+								Current state: %d currentBuffer: %s`, p.state.State, string(tcpReceiveBuffer))
+					}
+					fsm.ResetBuffer()
 					fsm.Init()
 					continue // on timeout....
 				} else if opErr, ok := err.(*net.OpError); ok && opErr.Op == "read" {
@@ -200,16 +215,6 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 				}
 				p.receiveThreadIsRunning = false
 				return
-			}
-
-			err = conn.SetDeadline(time.Now().Add(time.Second * 60))
-			if err != nil {
-				if os.Getenv("BNETDEBUG") == "true" {
-					fmt.Printf(`timeout reached to read data from connection. Resetting fsm to init and reset current buffer.
-								Current state: %d currentBuffer: %s`, p.state.State, string(tcpReceiveBuffer[:n]))
-				}
-				fsm.ResetBuffer()
-				fsm.Init()
 			}
 
 			for _, ascii := range tcpReceiveBuffer[:n] {
