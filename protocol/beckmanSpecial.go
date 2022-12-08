@@ -5,6 +5,7 @@ import (
 	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 	"io"
 	"net"
+	"os"
 	"time"
 )
 
@@ -170,10 +171,26 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 
 		fsm := utilities.CreateFSM(p.generateRules())
 		for {
+			err := conn.SetReadDeadline(time.Now().Add(time.Second * 60))
+			if err != nil {
+				fmt.Printf(`should not happen: %s`, err.Error())
+				p.receiveThreadIsRunning = false
+				p.receiveQ <- protocolMessage{
+					Status: DISCONNECT,
+					Data:   []byte(err.Error()),
+				}
+				return
+			}
+
 			n, err := conn.Read(tcpReceiveBuffer)
 			// enabled FSM
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
+					if os.Getenv("BNETDEBUG") == "true" {
+						fmt.Printf(`timeout reached to read data from connection. Resetting fsm to init and reset current buffer.
+								Current state: %d currentBuffer: %s`, p.state.State, string(tcpReceiveBuffer))
+					}
+					fsm.ResetBuffer()
 					fsm.Init()
 					continue // on timeout....
 				} else if opErr, ok := err.(*net.OpError); ok && opErr.Op == "read" {
