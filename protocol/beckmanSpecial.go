@@ -171,7 +171,7 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 
 		fsm := utilities.CreateFSM(p.generateRules())
 		for {
-			err := conn.SetReadDeadline(time.Now().Add(time.Second * 60))
+			err := conn.SetReadDeadline(time.Now().Add(time.Minute * 25))
 			if err != nil {
 				fmt.Printf(`should not happen: %s`, err.Error())
 				p.receiveThreadIsRunning = false
@@ -190,6 +190,7 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 						fmt.Printf(`timeout reached to read data from connection. Resetting fsm to init and reset current buffer.
 								Current state: %d currentBuffer: %s`, p.state.State, string(tcpReceiveBuffer))
 					}
+					tcpReceiveBuffer = make([]byte, 4096)
 					fsm.ResetBuffer()
 					fsm.Init()
 					continue // on timeout....
