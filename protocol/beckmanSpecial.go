@@ -266,6 +266,13 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 						}
 					}
 
+					_, err = conn.Write([]byte{utilities.ACK})
+					if err != nil {
+						if os.Getenv("BNETDEBUG") == "true" {
+							fmt.Printf("line received error while sending ack: %s", err.Error())
+						}
+					}
+
 					fsm.ResetBuffer()
 				case RetransmitLastMessage:
 					p.receiveQ <- protocolMessage{
