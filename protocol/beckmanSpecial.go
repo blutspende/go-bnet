@@ -350,6 +350,10 @@ func (p *beckmanSpecialProtocol) Send(conn net.Conn, data [][]byte) (int, error)
 		}
 	}
 
+	if os.Getenv("BNETDEBUG") == "true" {
+		fmt.Printf(`sending buffer: %+v`, msgBuff)
+	}
+
 	return conn.Write(msgBuff)
 }
 
