@@ -184,3 +184,19 @@ config.SessionAfterFirstByte = false // Default: true
 config := DefaultTCPServerSettings
 config.SessionInitationTimeout = time.Second * 3  // Default: 0
 ```
+
+#### Adding logging on protocol-level
+
+Logging can be added to any protocol by wrapping the Protocol into the logger. This does not affect the functionality.
+In addition set the **environment-variable** PROTOLOG_ENABLE to true.
+``` bash
+set PROTOLOG_ENABLE=true
+```
+``` golang
+tcpServer := bloodlabnet.CreateNewTCPServerInstance(config.TCPListenerPort,
+  bloodlabnetProtocol.Logger(
+    bloodlabnetProtocol.MLLP(bloodlabnetProtocol.DefaultMLLPProtocolSettings().SetStartByte(0))
+  ),
+  bloodlabnet.HAProxySendProxyV2, config.TCPServerMaxConnections)
+
+````
