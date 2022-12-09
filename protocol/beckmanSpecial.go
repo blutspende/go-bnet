@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -92,6 +93,9 @@ type beckmanSpecialProtocol struct {
 	receiveThreadIsRunning bool
 	receiveQ               chan protocolMessage
 	state                  processState
+
+	asyncReadActive sync.WaitGroup
+	asyncSendActive sync.WaitGroup
 }
 
 func BeckmanSpecialProtocol(settings ...*BeckmanSpecialProtocolSettings) Implementation {
@@ -103,8 +107,10 @@ func BeckmanSpecialProtocol(settings ...*BeckmanSpecialProtocolSettings) Impleme
 	}
 
 	return &beckmanSpecialProtocol{
-		settings: theSettings,
-		receiveQ: make(chan protocolMessage),
+		settings:        theSettings,
+		receiveQ:        make(chan protocolMessage),
+		asyncReadActive: sync.WaitGroup{},
+		asyncSendActive: sync.WaitGroup{},
 	}
 }
 
@@ -127,7 +133,7 @@ func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
 		utilities.Rule{FromState: 1, Symbols: []byte{'D', 'S', 'd'}, ToState: 2, Scan: true},
 		utilities.Rule{FromState: 1, Symbols: []byte{'R'}, ToState: 10, Scan: true},
 
-		utilities.Rule{FromState: 10, Symbols: []byte{'B'}, ToState: 14, ActionCode: JustAck, Scan: true},
+		utilities.Rule{FromState: 10, Symbols: []byte{'B'}, ToState: 14, Scan: true},
 		utilities.Rule{FromState: 10, Symbols: []byte{'E'}, ToState: 7, Scan: true},
 		utilities.Rule{FromState: 10, Symbols: printableChars8BitWithoutE, ToState: 11, ActionCode: RequestStart, Scan: true},
 		utilities.Rule{FromState: 11, Symbols: []byte{p.settings.endByte}, ToState: 12, ActionCode: LineReceived, Scan: false},
@@ -181,8 +187,10 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 				}
 				return
 			}
-
+			p.asyncSendActive.Wait()
+			p.asyncReadActive.Add(1)
 			n, err := conn.Read(tcpReceiveBuffer)
+			p.asyncReadActive.Done()
 			// enabled FSM
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
@@ -267,11 +275,12 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 						}
 					}
 
+					if p.settings.acknowledgementTimeout > 0 {
+						time.Sleep(p.settings.acknowledgementTimeout)
+					}
 					_, err = conn.Write([]byte{utilities.ACK})
 					if err != nil {
-						if os.Getenv("BNETDEBUG") == "true" {
-							fmt.Printf("line received error while sending ack: %s", err.Error())
-						}
+						fsm.Init()
 					}
 
 					fsm.ResetBuffer()
@@ -310,7 +319,10 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 					if p.settings.acknowledgementTimeout > 0 {
 						time.Sleep(p.settings.acknowledgementTimeout)
 					}
-					conn.Write([]byte{utilities.ACK})
+					_, err = conn.Write([]byte{utilities.ACK})
+					if err != nil {
+						fsm.Init()
+					}
 				default:
 					protocolMsg := protocolMessage{
 						Status: ERROR,
@@ -345,29 +357,108 @@ func (p *beckmanSpecialProtocol) Receive(conn net.Conn) ([]byte, error) {
 }
 
 func (p *beckmanSpecialProtocol) Send(conn net.Conn, data [][]byte) (int, error) {
-	msgBuff := make([]byte, 0)
+	p.asyncSendActive.Add(1)
+	defer p.asyncSendActive.Done()
+
+	conn.SetReadDeadline(time.Now())
+	p.asyncReadActive.Wait()
+	conn.SetReadDeadline(time.Time{}) // Reset timeline
 
 	// Maybe need to wait until the answer of the instrument
 	for _, buff := range data {
 		if len(buff) > 1 {
-			msgBuff = append(msgBuff, p.settings.startByte)
+			msgBuff := make([]byte, 0)
+			if p.settings.acknowledgementTimeout > 0 {
+				time.Sleep(p.settings.acknowledgementTimeout)
+			}
+			_, err := conn.Write([]byte{p.settings.startByte})
+			if err != nil {
+				return 0, err
+			}
+
+			receivingMsg, err := p.receiveSendAnswer(conn)
+			if err != nil {
+				return -1, err
+			}
+			switch receivingMsg {
+			case utilities.ACK:
+			case utilities.NAK:
+				return -1, fmt.Errorf("instrument(lis1a1) did not accept any data")
+			default:
+				fmt.Printf("Warning: Recieved unexpected bytes in transmission (ignoring them) : %c ascii: %d\n", receivingMsg, receivingMsg)
+				continue // ignore all characters until ACK
+			}
+
+			if p.settings.acknowledgementTimeout > 0 {
+				time.Sleep(p.settings.acknowledgementTimeout)
+			}
+
 			msgBuff = append(msgBuff, buff...)
 			msgBuff = append(msgBuff, p.settings.endByte)
+			_, err = conn.Write(msgBuff)
+			if err != nil {
+				return -1, err
+			}
 		} else {
-			msgBuff = append(msgBuff, buff...)
+			// Send and wait for answer#
+			if p.settings.acknowledgementTimeout > 0 {
+				time.Sleep(p.settings.acknowledgementTimeout)
+			}
+			_, err := conn.Write(buff)
+			if err != nil {
+				return 0, err
+			}
+
+			receivingMsg, err := p.receiveSendAnswer(conn)
+			if err != nil {
+				return -1, err
+			}
+			switch receivingMsg {
+			case utilities.ACK:
+				continue
+			case utilities.NAK:
+				return -1, fmt.Errorf("instrument(lis1a1) did not accept any data")
+			default:
+				fmt.Printf("Warning: Recieved unexpected bytes in transmission (ignoring them) : %c ascii: %d\n", receivingMsg, receivingMsg)
+				continue // ignore all characters until ACK
+			}
+
 		}
 	}
 
-	if os.Getenv("BNETDEBUG") == "true" {
-		fmt.Printf(`sending buffer: %+v`, msgBuff)
+	return 0, nil
+}
+
+func (p *beckmanSpecialProtocol) receiveSendAnswer(conn net.Conn) (byte, error) {
+	err := conn.SetReadDeadline(time.Now().Add(time.Second * p.settings.sendTimeoutDuration))
+	if err != nil {
+		return 0, ReceiverDoesNotRespond
 	}
 
-	return conn.Write(msgBuff)
+	receivingMsg := make([]byte, 1)
+	_, err = conn.Read(receivingMsg)
+	if err != nil {
+		return 0, err
+	}
+
+	switch receivingMsg[0] {
+	case utilities.ACK:
+		// was successfully do next
+		return utilities.ACK, nil
+	case utilities.NAK:
+		// Last was not successfully do next
+		return utilities.NAK, nil
+	default:
+		return 0, ReceivedMessageIsInvalid
+	}
+
 }
 
 func (p *beckmanSpecialProtocol) NewInstance() Implementation {
 	return &beckmanSpecialProtocol{
-		settings: p.settings,
-		receiveQ: make(chan protocolMessage),
+		settings:        p.settings,
+		receiveQ:        make(chan protocolMessage),
+		asyncReadActive: sync.WaitGroup{},
+		asyncSendActive: sync.WaitGroup{},
 	}
 }
