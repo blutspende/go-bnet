@@ -3,6 +3,7 @@ package protocol
 import (
 	"fmt"
 	"net"
+	"os"
 	"testing"
 	"time"
 
@@ -36,7 +37,7 @@ type mockConnection struct {
 }
 
 func (m *mockConnection) Read(b []byte) (n int, err error) {
-	fmt.Println("Trying to read...")
+	// fmt.Println("Trying to read...")
 
 	if m.currentRecord >= len(m.scriptedProtocol) {
 		return 0, fmt.Errorf("Script is at end, but was expecting to receive data from instrument")
@@ -47,7 +48,7 @@ func (m *mockConnection) Read(b []byte) (n int, err error) {
 			b[i] = m.scriptedProtocol[m.currentRecord].bytes[i]
 		}
 
-		fmt.Printf("Sending: %+v\n", m.scriptedProtocol[m.currentRecord].bytes)
+		// fmt.Printf("Sending: %+v\n", m.scriptedProtocol[m.currentRecord].bytes)
 
 		theLength := len(m.scriptedProtocol[m.currentRecord].bytes)
 		m.currentRecord = m.currentRecord + 1
@@ -78,7 +79,7 @@ func (m *mockConnection) Write(b []byte) (n int, err error) {
 		// at this point we know we recieved the expected, time to move on
 		m.currentRecord = m.currentRecord + 1
 
-		fmt.Println("Recieving:", string(b), b)
+		// fmt.Println("Recieving:", string(b), b)
 	} else {
 		return 0, fmt.Errorf("Testing: Expected to recieve '%v' but got '%v'", m.scriptedProtocol[m.currentRecord], b)
 	}
@@ -117,15 +118,15 @@ func TestSendData(t *testing.T) {
 	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.ENQ}})
 	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "tx", bytes: []byte{utilities.ACK}})
 	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.STX}})
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte([]byte("H||||"))})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte([]byte("1H||||"))})
 	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.ETX}})
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{51, 66}}) // checksum
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{54, 67}}) // checksum
 	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{13, 10}})
 	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "tx", bytes: []byte{utilities.ACK}})
 	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.STX}})
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte([]byte("O|1|||||"))})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte([]byte("2O|1|||||"))})
 	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.ETX}})
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{54, 66}}) // checksum
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{57, 68}}) // checksum
 	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{13, 10}})
 	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "tx", bytes: []byte{utilities.ACK}})
 	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.EOT}})
@@ -137,7 +138,8 @@ func TestSendData(t *testing.T) {
 	message = append(message, []byte("H||||"))
 	message = append(message, []byte("O|1|||||"))
 
-	instance := Lis1A1Protocol(DefaultLis1A1ProtocolSettings())
+	os.Setenv("PROTOLOG_ENABLE", "true") // enable logging
+	instance := Logger(Lis1A1Protocol(DefaultLis1A1ProtocolSettings()))
 
 	_, err := instance.Send(&mc, message)
 
