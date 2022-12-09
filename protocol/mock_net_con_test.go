@@ -17,18 +17,14 @@ type mockConnection struct {
 }
 
 func (m *mockConnection) Read(b []byte) (n int, err error) {
-	// fmt.Println("Trying to read...")
-	fmt.Printf("TADADAADADADA \n")
+
+	var x net.Conn
 	if m.currentRecord >= len(m.scriptedProtocol) {
 		return 0, fmt.Errorf("Script is at end, but was expecting to receive data from instrument")
 	}
 
 	if m.scriptedProtocol[m.currentRecord].receiveOrSend == "tx" {
-		for i := 0; i < len(m.scriptedProtocol[m.currentRecord].bytes); i++ {
-			b[i] = m.scriptedProtocol[m.currentRecord].bytes[i]
-		}
-
-		// fmt.Printf("Sending: %+v\n", m.scriptedProtocol[m.currentRecord].bytes)
+		copy(b, m.scriptedProtocol[m.currentRecord].bytes)
 
 		theLength := len(m.scriptedProtocol[m.currentRecord].bytes)
 		m.currentRecord = m.currentRecord + 1

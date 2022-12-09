@@ -1,45 +1,50 @@
 package protocol
 
 import (
-	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
-	"github.com/stretchr/testify/assert"
+	"net"
 	"os"
 	"testing"
+
+	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTimings(t *testing.T) {
-	var mc mockConnection
-	mc.scriptedProtocol = make([]scriptedProtocol, 0)
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.ACK}})
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "tx", bytes: []byte{utilities.STX}})
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.ACK}})
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "tx", bytes: []byte("S 005803 083811223344558    E61626307\u000A")})
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.ACK}})
-	/*mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.STX}})
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "tx", bytes: []byte{utilities.ACK}})
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte("R 03005803 083811223344558\u000A")})
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "tx", bytes: []byte{utilities.ACK}})
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "tx", bytes: []byte{utilities.STX}})
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "tx", bytes: []byte("S 005803 083811223344558    E61626307\u000A")})
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.ACK}})
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.STX}})
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "tx", bytes: []byte{utilities.ACK}})
-	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte("RE03\u000A")})*/
 
-	mc.currentRecord = 0
+	//var mc mockOnlineConn
+
+	host, instrument := net.Pipe()
 
 	os.Setenv("PROTOLOG_ENABLE", "true") // enable logging
-	instance := Logger(BeckmanSpecialProtocol(DefaultBeckmanSpecialProtocolSettings().
+	/*	instance := Logger(BeckmanSpecialProtocol(DefaultBeckmanSpecialProtocolSettings().
 		SetStartByte(0x02).
 		SetEndByte(0x0A).
 		SetLineBreakByte(0x0A)))
+	*/
+	//request := instance.Receive(mc, c)
 
-	messages := make([][]byte, 0)
-	messages = append(messages, []byte{utilities.ACK})
-	messages = append(messages, []byte("S 005803 083811223344558    E61626307\u000A"))
-	// mc.Write([]byte{utilities.STX})
+	instrument.Write([]byte{2})
+	//expect ACK
 
-	_, err := instance.Send(&mc, messages)
-	assert.Nil(t, err)
-	// assert.Equal(t, 1, sentBytes)
+	RB := []byte{utilities.STX, 'R', 'B', '0', '3', utilities.LF, 0 /*bcc*/}
+	instrument.Write(RB)
+	//expect ACK
+
+	R1 := []byte{utilities.STX, 'R', ' ', '0', '3', '1', '1', '1', '1', /* RACK# */
+		'0', '1' /*CUP*/, '2', '2', '2', '2', /*SAMPLENO*/
+		'9', '9', '9', '9', '9', '9', '9', '9', '9', '9', utilities.LF, 0 /*bcc*/}
+	instrument.Write(R1)
+	//expect ACK
+
+	// expect SB
+	// expect S .....
+
+	RE := []byte{utilities.STX, 'R', 'E', '0', '3', utilities.LF, 0 /*bcc*/}
+	instrument.Write(RE)
+
+	//expect ACK
+	buffer1 := make([]byte, 1)
+	instrument.Read(buffer1)
+	assert.Equal(t, utilities.ACK, buffer1)
+
 }
