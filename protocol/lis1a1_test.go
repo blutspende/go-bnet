@@ -3,6 +3,7 @@ package protocol
 import (
 	"fmt"
 	"net"
+	"os"
 	"testing"
 	"time"
 
@@ -137,7 +138,8 @@ func TestSendData(t *testing.T) {
 	message = append(message, []byte("H||||"))
 	message = append(message, []byte("O|1|||||"))
 
-	instance := Lis1A1Protocol(DefaultLis1A1ProtocolSettings())
+	os.Setenv("PROTOLOG_ENABLE", "true") // enable logging
+	instance := Logger(Lis1A1Protocol(DefaultLis1A1ProtocolSettings()))
 
 	_, err := instance.Send(&mc, message)
 
