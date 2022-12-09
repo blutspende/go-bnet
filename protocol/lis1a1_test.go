@@ -48,7 +48,7 @@ func (m *mockConnection) Read(b []byte) (n int, err error) {
 			b[i] = m.scriptedProtocol[m.currentRecord].bytes[i]
 		}
 
-		fmt.Printf("Sending: %+v\n", m.scriptedProtocol[m.currentRecord].bytes)
+		// fmt.Printf("Sending: %+v\n", m.scriptedProtocol[m.currentRecord].bytes)
 
 		theLength := len(m.scriptedProtocol[m.currentRecord].bytes)
 		m.currentRecord = m.currentRecord + 1
@@ -79,7 +79,7 @@ func (m *mockConnection) Write(b []byte) (n int, err error) {
 		// at this point we know we recieved the expected, time to move on
 		m.currentRecord = m.currentRecord + 1
 
-		fmt.Println("Recieving:", string(b), b)
+		// fmt.Println("Recieving:", string(b), b)
 	} else {
 		return 0, fmt.Errorf("Testing: Expected to recieve '%v' but got '%v'", m.scriptedProtocol[m.currentRecord], b)
 	}
