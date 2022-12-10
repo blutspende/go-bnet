@@ -18,7 +18,6 @@ type mockConnection struct {
 
 func (m *mockConnection) Read(b []byte) (n int, err error) {
 
-	var x net.Conn
 	if m.currentRecord >= len(m.scriptedProtocol) {
 		return 0, fmt.Errorf("Script is at end, but was expecting to receive data from instrument")
 	}
