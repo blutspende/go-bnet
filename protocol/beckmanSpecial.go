@@ -144,7 +144,7 @@ func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
 		{FromState: 3, Symbols: utilities.PrintableChars8Bit, ToState: 3, Scan: true},
 
 		//utilities.Rule{FromState:4 , Symbols: utilities.PrintableChars8Bit, ToState: 5, ActionCode: utilities.CheckSum, Scan: true},
-		{FromState: 5, Symbols: []byte{p.settings.startByte}, ToState: 1, ActionCode: JustAck, Scan: false},
+		{FromState: 5, Symbols: []byte{p.settings.startByte}, ToState: 1, Scan: false},
 
 		{FromState: 2, Symbols: []byte{'E'}, ToState: 7, Scan: true},
 		{FromState: 7, Symbols: []byte{p.settings.endByte}, ToState: 0, ActionCode: utilities.Finish, Scan: false},
