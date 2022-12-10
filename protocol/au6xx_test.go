@@ -116,3 +116,7 @@ func TestMultipleMessageRequestResponse(t *testing.T) {
 func TestMultipleMessageRequestResponseIncludingARetryOnSimulatedFail(t *testing.T) {
 	// TODO
 }
+
+func TestDataResultMessageWithANAK(t *testing.T) {
+	// TODO
+}
