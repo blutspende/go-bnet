@@ -120,10 +120,7 @@ const (
 )
 
 func (p *beckmanSpecialProtocol) Interrupt() {
-	p.receiveQ <- protocolMessage{
-		Status: DATA,
-		Data:   []byte{},
-	}
+	panic("not implemented")
 }
 
 func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
