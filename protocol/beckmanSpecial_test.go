@@ -100,9 +100,9 @@ func TestOneMessageRequestResponse(t *testing.T) {
 
 		instrument.Read(buffer_31Bytes)
 		timeOf_AfterSMessageRead := time.Now()
-		// the transmission of 31 bytes takes 522 ms !
-		assert.LessOrEqual(t, int64(1022), timeOf_AfterSMessageRead.Sub(timeOf_SendingAckForSTXforSMessage).Milliseconds())
-		assert.GreaterOrEqual(t, int64(3022-expectedLatency_inMs_TimesTwo), timeOf_AfterSMessageRead.Sub(timeOf_SendingAckForSTXforSMessage).Milliseconds())
+		// the transmission of 31 bytes takes 522 ms ! instrument has 9600 boud but the test environment has about 50 mio boud
+		assert.LessOrEqual(t, int64(500), timeOf_AfterSMessageRead.Sub(timeOf_SendingAckForSTXforSMessage).Milliseconds())
+		assert.GreaterOrEqual(t, int64(2522-expectedLatency_inMs_TimesTwo), timeOf_AfterSMessageRead.Sub(timeOf_SendingAckForSTXforSMessage).Milliseconds())
 		assert.Equal(t, []byte("S 34567890123456789012345678901"), buffer_31Bytes)
 
 		// wait for 0.5 secs
