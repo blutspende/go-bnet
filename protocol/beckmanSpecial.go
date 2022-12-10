@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
@@ -93,9 +92,6 @@ type beckmanSpecialProtocol struct {
 	receiveThreadIsRunning bool
 	receiveQ               chan protocolMessage
 	state                  processState
-
-	asyncReadActive sync.WaitGroup
-	asyncSendActive sync.WaitGroup
 }
 
 func BeckmanSpecialProtocol(settings ...*BeckmanSpecialProtocolSettings) Implementation {
@@ -107,10 +103,8 @@ func BeckmanSpecialProtocol(settings ...*BeckmanSpecialProtocolSettings) Impleme
 	}
 
 	return &beckmanSpecialProtocol{
-		settings:        theSettings,
-		receiveQ:        make(chan protocolMessage),
-		asyncReadActive: sync.WaitGroup{},
-		asyncSendActive: sync.WaitGroup{},
+		settings: theSettings,
+		receiveQ: make(chan protocolMessage),
 	}
 }
 
@@ -186,13 +180,11 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 				}
 				return
 			}
-			p.asyncSendActive.Wait()
-			p.asyncReadActive.Add(1)
 			n, err := conn.Read(tcpReceiveBuffer)
-			p.asyncReadActive.Done()
 			// enabled FSM
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
+					fmt.Printf("read timeout reached. reset fsm")
 					tcpReceiveBuffer = make([]byte, 4096)
 					fsm.ResetBuffer()
 					fsm.Init()
@@ -257,6 +249,7 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 					}
 					_, err = conn.Write([]byte{utilities.ACK})
 					if err != nil {
+						fmt.Printf("can not send ACK in LineReceived. Should never happen\n")
 						fsm.Init()
 					}
 
@@ -291,6 +284,7 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 					}
 					_, err = conn.Write([]byte{utilities.ACK})
 					if err != nil {
+						fmt.Printf("can not send ACK in Finish. Should never happen\n")
 						fsm.Init()
 					}
 
@@ -360,13 +354,6 @@ func (p *beckmanSpecialProtocol) Receive(conn net.Conn) ([]byte, error) {
 }
 
 func (p *beckmanSpecialProtocol) Send(conn net.Conn, data [][]byte) (int, error) {
-	p.asyncSendActive.Add(1)
-	defer p.asyncSendActive.Done()
-
-	conn.SetReadDeadline(time.Now())
-	p.asyncReadActive.Wait()
-	conn.SetReadDeadline(time.Time{}) // Reset timeline
-
 	// Maybe need to wait until the answer of the instrument
 	for _, buff := range data {
 		msgBuff := make([]byte, 0)
@@ -412,9 +399,7 @@ func (p *beckmanSpecialProtocol) receiveSendAnswer(conn net.Conn) (byte, error) 
 
 func (p *beckmanSpecialProtocol) NewInstance() Implementation {
 	return &beckmanSpecialProtocol{
-		settings:        p.settings,
-		receiveQ:        make(chan protocolMessage),
-		asyncReadActive: sync.WaitGroup{},
-		asyncSendActive: sync.WaitGroup{},
+		settings: p.settings,
+		receiveQ: make(chan protocolMessage),
 	}
 }
