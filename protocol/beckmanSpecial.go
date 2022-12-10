@@ -119,8 +119,10 @@ const (
 )
 
 func (p *beckmanSpecialProtocol) Interrupt() {
-	//TODO implement me
-	panic("implement me")
+	p.receiveQ <- protocolMessage{
+		Status: DATA,
+		Data:   []byte{},
+	}
 }
 
 func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
@@ -286,6 +288,14 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 					}
 				case utilities.Finish:
 					// send fileData if not request
+					if p.settings.acknowledgementTimeout > 0 {
+						time.Sleep(p.settings.acknowledgementTimeout)
+					}
+					_, err = conn.Write([]byte{utilities.ACK})
+					if err != nil {
+						fsm.Init()
+					}
+
 					if p.state.isRequest {
 						p.state.isRequest = false
 					} else {
