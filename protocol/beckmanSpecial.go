@@ -5,7 +5,6 @@ import (
 	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 	"io"
 	"net"
-	"os"
 	"sync"
 	"time"
 )
@@ -139,7 +138,7 @@ func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
 		utilities.Rule{FromState: 11, Symbols: []byte{p.settings.endByte}, ToState: 12, ActionCode: LineReceived, Scan: false},
 		utilities.Rule{FromState: 11, Symbols: utilities.PrintableChars8Bit, ToState: 11, Scan: true},
 		utilities.Rule{FromState: 12, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 13, Scan: false},
-		utilities.Rule{FromState: 13, Symbols: []byte{p.settings.startByte}, ToState: 1, Scan: false},
+		utilities.Rule{FromState: 13, Symbols: []byte{p.settings.startByte}, ToState: 1, ActionCode: JustAck, Scan: false},
 		utilities.Rule{FromState: 13, Symbols: []byte{utilities.NAK}, ToState: 13, ActionCode: RetransmitLastMessage, Scan: false},
 		utilities.Rule{FromState: 13, Symbols: []byte{utilities.ACK}, ToState: 13, Scan: false},
 
@@ -194,10 +193,6 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 			// enabled FSM
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
-					if os.Getenv("BNETDEBUG") == "true" {
-						fmt.Printf(`timeout reached to read data from connection. Resetting fsm to init and reset current buffer.
-								Current state: %d currentBuffer: %s`, p.state.State, string(tcpReceiveBuffer))
-					}
 					tcpReceiveBuffer = make([]byte, 4096)
 					fsm.ResetBuffer()
 					fsm.Init()
@@ -257,6 +252,14 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 					p.state.isRequest = true
 				case LineReceived:
 					// append Data
+					if p.settings.acknowledgementTimeout > 0 {
+						time.Sleep(p.settings.acknowledgementTimeout)
+					}
+					_, err = conn.Write([]byte{utilities.ACK})
+					if err != nil {
+						fsm.Init()
+					}
+
 					lastMessage = messageBuffer
 					if p.state.isRequest && len(messageBuffer) > 5 { // 5 Because if a bcc is set than its bigger than 4
 						// Request logic
@@ -273,14 +276,6 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 						} else {
 							fileBuffer = append(fileBuffer, lastMessage)
 						}
-					}
-
-					if p.settings.acknowledgementTimeout > 0 {
-						time.Sleep(p.settings.acknowledgementTimeout)
-					}
-					_, err = conn.Write([]byte{utilities.ACK})
-					if err != nil {
-						fsm.Init()
 					}
 
 					fsm.ResetBuffer()
