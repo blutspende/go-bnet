@@ -9,7 +9,7 @@ import (
 	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 )
 
-type BeckmanSpecialProtocolSettings struct {
+type AU6XXProtocolSettings struct {
 	strictChecksumValidation bool
 	sendTimeoutDuration      time.Duration
 	startByte                byte
@@ -19,61 +19,65 @@ type BeckmanSpecialProtocolSettings struct {
 	realTimeDataTransmission bool
 }
 
-func (s BeckmanSpecialProtocolSettings) SetLineBreakByte(lineBreak byte) *BeckmanSpecialProtocolSettings {
+func (s AU6XXProtocolSettings) SetLineBreakByte(lineBreak byte) *AU6XXProtocolSettings {
 	s.lineBreak = lineBreak
 	return &s
 }
 
-func (s BeckmanSpecialProtocolSettings) SetStartByte(start byte) *BeckmanSpecialProtocolSettings {
+func (s AU6XXProtocolSettings) SetStartByte(start byte) *AU6XXProtocolSettings {
 	s.startByte = start
 	return &s
 }
 
-func (s BeckmanSpecialProtocolSettings) SetEndByte(end byte) *BeckmanSpecialProtocolSettings {
+func (s AU6XXProtocolSettings) SetEndByte(end byte) *AU6XXProtocolSettings {
 	s.endByte = end
 	return &s
 }
 
-func (s BeckmanSpecialProtocolSettings) SetSendTimeoutDuration(duration time.Duration) *BeckmanSpecialProtocolSettings {
+func (s AU6XXProtocolSettings) SetSendTimeoutDuration(duration time.Duration) *AU6XXProtocolSettings {
 	s.sendTimeoutDuration = duration
 	return &s
 }
 
-func (s BeckmanSpecialProtocolSettings) EnableChecksumValidation() *BeckmanSpecialProtocolSettings {
+func (s AU6XXProtocolSettings) EnableChecksumValidation() *AU6XXProtocolSettings {
 	s.strictChecksumValidation = true
 	return &s
 }
 
-func (s BeckmanSpecialProtocolSettings) DisableChecksumValidation() *BeckmanSpecialProtocolSettings {
+func (s AU6XXProtocolSettings) DisableChecksumValidation() *AU6XXProtocolSettings {
 	s.strictChecksumValidation = false
 	return &s
 }
 
-// SetAcknowledgementTimeout should be between 0.5ms to max 2s
-// Default is 0
-func (s BeckmanSpecialProtocolSettings) SetAcknowledgementTimeout(duration time.Duration) *BeckmanSpecialProtocolSettings {
+// SetAcknowledgementTimeout should be between 0.5ms to max 2.5s
+// Default is 500ms
+func (s AU6XXProtocolSettings) SetAcknowledgementTimeout(duration time.Duration) *AU6XXProtocolSettings {
+	if duration > time.Millisecond*2500 {
+		fmt.Printf("warning | acknowledgementTimeout is too big. The instrument wont work with a duration of %d ms", duration/time.Millisecond)
+	}
+
 	s.acknowledgementTimeout = duration
 	return &s
 }
 
-func (s BeckmanSpecialProtocolSettings) EnableRealTimeDataTransmission() *BeckmanSpecialProtocolSettings {
+func (s AU6XXProtocolSettings) EnableRealTimeDataTransmission() *AU6XXProtocolSettings {
 	s.realTimeDataTransmission = true
 	return &s
 }
 
-func (s BeckmanSpecialProtocolSettings) DisableRealTimeDataTransmission() *BeckmanSpecialProtocolSettings {
+func (s AU6XXProtocolSettings) DisableRealTimeDataTransmission() *AU6XXProtocolSettings {
 	s.realTimeDataTransmission = false
 	return &s
 }
 
-func DefaultBeckmanSpecialProtocolSettings() *BeckmanSpecialProtocolSettings {
-	return &BeckmanSpecialProtocolSettings{
+func DefaultAU6XXProtocolSettings() *AU6XXProtocolSettings {
+	return &AU6XXProtocolSettings{
 		strictChecksumValidation: false,
 		sendTimeoutDuration:      time.Second * 60,
 		startByte:                utilities.STX,
 		endByte:                  utilities.ETX,
 		lineBreak:                utilities.CR,
-		acknowledgementTimeout:   time.Millisecond * 0,
+		acknowledgementTimeout:   time.Millisecond * 500,
 		realTimeDataTransmission: false,
 	}
 }
@@ -87,22 +91,22 @@ type processState struct {
 	isRequest       bool
 }
 
-type beckmanSpecialProtocol struct {
-	settings               *BeckmanSpecialProtocolSettings
+type au6xxProtocol struct {
+	settings               *AU6XXProtocolSettings
 	receiveThreadIsRunning bool
 	receiveQ               chan protocolMessage
 	state                  processState
 }
 
-func BeckmanSpecialProtocol(settings ...*BeckmanSpecialProtocolSettings) Implementation {
-	var theSettings *BeckmanSpecialProtocolSettings
+func AU6XXProtocol(settings ...*AU6XXProtocolSettings) Implementation {
+	var theSettings *AU6XXProtocolSettings
 	if len(settings) >= 1 {
 		theSettings = settings[0]
 	} else {
-		theSettings = DefaultBeckmanSpecialProtocolSettings()
+		theSettings = DefaultAU6XXProtocolSettings()
 	}
 
-	return &beckmanSpecialProtocol{
+	return &au6xxProtocol{
 		settings: theSettings,
 		receiveQ: make(chan protocolMessage),
 	}
@@ -113,11 +117,11 @@ const (
 	RetransmitLastMessage utilities.ActionCode = "RetransmitLastMessage"
 )
 
-func (p *beckmanSpecialProtocol) Interrupt() {
+func (p *au6xxProtocol) Interrupt() {
 	panic("not implemented")
 }
 
-func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
+func (p *au6xxProtocol) generateRules() []utilities.Rule {
 	var printableChars8BitWithoutE = []byte{10, 13, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255}
 
 	// CHECK For If CheckSumCheck is enabled
@@ -154,7 +158,7 @@ func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
 	}
 }
 
-func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
+func (p *au6xxProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 
 	if p.receiveThreadIsRunning {
 		return
@@ -336,7 +340,7 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 	}()
 }
 
-func (p *beckmanSpecialProtocol) Receive(conn net.Conn) ([]byte, error) {
+func (p *au6xxProtocol) Receive(conn net.Conn) ([]byte, error) {
 	p.ensureReceiveThreadRunning(conn)
 
 	message := <-p.receiveQ
@@ -353,7 +357,7 @@ func (p *beckmanSpecialProtocol) Receive(conn net.Conn) ([]byte, error) {
 	}
 }
 
-func (p *beckmanSpecialProtocol) Send(conn net.Conn, data [][]byte) (int, error) {
+func (p *au6xxProtocol) Send(conn net.Conn, data [][]byte) (int, error) {
 	// Maybe need to wait until the answer of the instrument
 	for _, buff := range data {
 		msgBuff := make([]byte, 0)
@@ -372,7 +376,7 @@ func (p *beckmanSpecialProtocol) Send(conn net.Conn, data [][]byte) (int, error)
 	return 0, nil
 }
 
-func (p *beckmanSpecialProtocol) receiveSendAnswer(conn net.Conn) (byte, error) {
+func (p *au6xxProtocol) receiveSendAnswer(conn net.Conn) (byte, error) {
 	err := conn.SetReadDeadline(time.Now().Add(time.Second * p.settings.sendTimeoutDuration))
 	if err != nil {
 		return 0, ReceiverDoesNotRespond
@@ -397,8 +401,8 @@ func (p *beckmanSpecialProtocol) receiveSendAnswer(conn net.Conn) (byte, error) 
 
 }
 
-func (p *beckmanSpecialProtocol) NewInstance() Implementation {
-	return &beckmanSpecialProtocol{
+func (p *au6xxProtocol) NewInstance() Implementation {
+	return &au6xxProtocol{
 		settings: p.settings,
 		receiveQ: make(chan protocolMessage),
 	}
