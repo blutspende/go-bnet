@@ -29,8 +29,8 @@ func (pl *protocolLogger) logRead(n int, err error, datafull []byte) {
 		return
 	}
 
-	peek := substr(makeBytesReadable(datafull), 0, 30)
-	if len(datafull) > 30 {
+	peek := substr(makeBytesReadable(datafull[:n]), 0, 30)
+	if len(peek) > 30 {
 		peek = peek + "..."
 	}
 
@@ -77,7 +77,7 @@ func (pl *protocolLogger) NewInstance() Implementation {
 
 func Logger(protocol Implementation) Implementation {
 	return &protocolLogger{
-		enableLog: (os.Getenv("PROTOLOG_ENABLE") == "true"),
+		enableLog: os.Getenv("PROTOLOG_ENABLE") != "",
 		protocol:  protocol,
 	}
 }

@@ -2,11 +2,12 @@ package protocol
 
 import (
 	"fmt"
-	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 	"io"
 	"net"
-	"os"
+	"sync"
 	"time"
+
+	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 )
 
 type BeckmanSpecialProtocolSettings struct {
@@ -92,6 +93,9 @@ type beckmanSpecialProtocol struct {
 	receiveThreadIsRunning bool
 	receiveQ               chan protocolMessage
 	state                  processState
+
+	asyncReadActive sync.WaitGroup
+	asyncSendActive sync.WaitGroup
 }
 
 func BeckmanSpecialProtocol(settings ...*BeckmanSpecialProtocolSettings) Implementation {
@@ -103,8 +107,10 @@ func BeckmanSpecialProtocol(settings ...*BeckmanSpecialProtocolSettings) Impleme
 	}
 
 	return &beckmanSpecialProtocol{
-		settings: theSettings,
-		receiveQ: make(chan protocolMessage),
+		settings:        theSettings,
+		receiveQ:        make(chan protocolMessage),
+		asyncReadActive: sync.WaitGroup{},
+		asyncSendActive: sync.WaitGroup{},
 	}
 }
 
@@ -114,8 +120,7 @@ const (
 )
 
 func (p *beckmanSpecialProtocol) Interrupt() {
-	//TODO implement me
-	panic("implement me")
+	panic("not implemented")
 }
 
 func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
@@ -123,35 +128,35 @@ func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
 
 	// CHECK For If CheckSumCheck is enabled
 	return []utilities.Rule{
-		utilities.Rule{FromState: 0, Symbols: []byte{p.settings.startByte}, ToState: 1, ActionCode: JustAck, Scan: false},
-		utilities.Rule{FromState: 1, Symbols: []byte{'D', 'S', 'd'}, ToState: 2, Scan: true},
-		utilities.Rule{FromState: 1, Symbols: []byte{'R'}, ToState: 10, Scan: true},
+		{FromState: 0, Symbols: []byte{p.settings.startByte}, ToState: 1, ActionCode: JustAck, Scan: false},
+		{FromState: 1, Symbols: []byte{'D', 'S', 'd'}, ToState: 2, Scan: true},
+		{FromState: 1, Symbols: []byte{'R'}, ToState: 10, Scan: true},
 
-		utilities.Rule{FromState: 10, Symbols: []byte{'B'}, ToState: 14, ActionCode: JustAck, Scan: true},
-		utilities.Rule{FromState: 10, Symbols: []byte{'E'}, ToState: 7, Scan: true},
-		utilities.Rule{FromState: 10, Symbols: printableChars8BitWithoutE, ToState: 11, ActionCode: RequestStart, Scan: true},
-		utilities.Rule{FromState: 11, Symbols: []byte{p.settings.endByte}, ToState: 12, ActionCode: LineReceived, Scan: false},
-		utilities.Rule{FromState: 11, Symbols: utilities.PrintableChars8Bit, ToState: 11, Scan: true},
-		utilities.Rule{FromState: 12, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 13, Scan: false},
-		utilities.Rule{FromState: 13, Symbols: []byte{p.settings.startByte}, ToState: 1, Scan: false},
-		utilities.Rule{FromState: 13, Symbols: []byte{utilities.NAK}, ToState: 13, ActionCode: RetransmitLastMessage, Scan: false},
-		utilities.Rule{FromState: 13, Symbols: []byte{utilities.ACK}, ToState: 13, Scan: false},
+		{FromState: 10, Symbols: []byte{'B'}, ToState: 14, Scan: true},
+		{FromState: 10, Symbols: []byte{'E'}, ToState: 7, Scan: true},
+		{FromState: 10, Symbols: printableChars8BitWithoutE, ToState: 11, ActionCode: RequestStart, Scan: true},
+		{FromState: 11, Symbols: []byte{p.settings.endByte}, ToState: 12, ActionCode: LineReceived, Scan: false},
+		{FromState: 11, Symbols: utilities.PrintableChars8Bit, ToState: 11, Scan: true},
+		{FromState: 12, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 13, Scan: false},
+		{FromState: 13, Symbols: []byte{p.settings.startByte}, ToState: 1, ActionCode: JustAck, Scan: false},
+		{FromState: 13, Symbols: []byte{utilities.NAK}, ToState: 13, ActionCode: RetransmitLastMessage, Scan: false},
+		{FromState: 13, Symbols: []byte{utilities.ACK}, ToState: 13, Scan: false},
 
-		utilities.Rule{FromState: 14, Symbols: []byte{p.settings.endByte}, ToState: 13, ActionCode: LineReceived, Scan: false},
-		utilities.Rule{FromState: 14, Symbols: utilities.PrintableChars8Bit, ToState: 14, Scan: true},
+		{FromState: 14, Symbols: []byte{p.settings.endByte}, ToState: 13, ActionCode: LineReceived, Scan: false},
+		{FromState: 14, Symbols: utilities.PrintableChars8Bit, ToState: 14, Scan: true},
 
-		utilities.Rule{FromState: 2, Symbols: printableChars8BitWithoutE, ToState: 3, Scan: true},
-		utilities.Rule{FromState: 3, Symbols: []byte{p.settings.endByte}, ToState: 5, ActionCode: LineReceived, Scan: false},
-		utilities.Rule{FromState: 3, Symbols: utilities.PrintableChars8Bit, ToState: 3, Scan: true},
+		{FromState: 2, Symbols: printableChars8BitWithoutE, ToState: 3, Scan: true},
+		{FromState: 3, Symbols: []byte{p.settings.endByte}, ToState: 5, ActionCode: LineReceived, Scan: false},
+		{FromState: 3, Symbols: utilities.PrintableChars8Bit, ToState: 3, Scan: true},
 
 		//utilities.Rule{FromState:4 , Symbols: utilities.PrintableChars8Bit, ToState: 5, ActionCode: utilities.CheckSum, Scan: true},
-		utilities.Rule{FromState: 5, Symbols: []byte{p.settings.startByte}, ToState: 1, ActionCode: JustAck, Scan: false},
+		{FromState: 5, Symbols: []byte{p.settings.startByte}, ToState: 1, ActionCode: JustAck, Scan: false},
 
-		utilities.Rule{FromState: 2, Symbols: []byte{'E'}, ToState: 7, Scan: true},
-		utilities.Rule{FromState: 7, Symbols: []byte{p.settings.endByte}, ToState: 0, ActionCode: utilities.Finish, Scan: false},
-		utilities.Rule{FromState: 7, Symbols: utilities.PrintableChars8Bit, ToState: 7, Scan: true},
+		{FromState: 2, Symbols: []byte{'E'}, ToState: 7, Scan: true},
+		{FromState: 7, Symbols: []byte{p.settings.endByte}, ToState: 0, ActionCode: utilities.Finish, Scan: false},
+		{FromState: 7, Symbols: utilities.PrintableChars8Bit, ToState: 7, Scan: true},
 		//utilities.Rule{FromState: 8, Symbols: utilities.PrintableChars8Bit, ToState: 9, ActionCode: utilities.CheckSum, Scan: true},
-		utilities.Rule{FromState: 9, Symbols: utilities.PrintableChars8Bit, ToState: 0, ActionCode: utilities.Finish, Scan: false},
+		{FromState: 9, Symbols: utilities.PrintableChars8Bit, ToState: 0, ActionCode: utilities.Finish, Scan: false},
 	}
 }
 
@@ -181,15 +186,13 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 				}
 				return
 			}
-
+			p.asyncSendActive.Wait()
+			p.asyncReadActive.Add(1)
 			n, err := conn.Read(tcpReceiveBuffer)
+			p.asyncReadActive.Done()
 			// enabled FSM
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
-					if os.Getenv("BNETDEBUG") == "true" {
-						fmt.Printf(`timeout reached to read data from connection. Resetting fsm to init and reset current buffer.
-								Current state: %d currentBuffer: %s`, p.state.State, string(tcpReceiveBuffer))
-					}
 					tcpReceiveBuffer = make([]byte, 4096)
 					fsm.ResetBuffer()
 					fsm.Init()
@@ -249,6 +252,14 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 					p.state.isRequest = true
 				case LineReceived:
 					// append Data
+					if p.settings.acknowledgementTimeout > 0 {
+						time.Sleep(p.settings.acknowledgementTimeout)
+					}
+					_, err = conn.Write([]byte{utilities.ACK})
+					if err != nil {
+						fsm.Init()
+					}
+
 					lastMessage = messageBuffer
 					if p.state.isRequest && len(messageBuffer) > 5 { // 5 Because if a bcc is set than its bigger than 4
 						// Request logic
@@ -267,13 +278,6 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 						}
 					}
 
-					_, err = conn.Write([]byte{utilities.ACK})
-					if err != nil {
-						if os.Getenv("BNETDEBUG") == "true" {
-							fmt.Printf("line received error while sending ack: %s", err.Error())
-						}
-					}
-
 					fsm.ResetBuffer()
 				case RetransmitLastMessage:
 					p.receiveQ <- protocolMessage{
@@ -282,6 +286,14 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 					}
 				case utilities.Finish:
 					// send fileData if not request
+					if p.settings.acknowledgementTimeout > 0 {
+						time.Sleep(p.settings.acknowledgementTimeout)
+					}
+					_, err = conn.Write([]byte{utilities.ACK})
+					if err != nil {
+						fsm.Init()
+					}
+
 					if p.state.isRequest {
 						p.state.isRequest = false
 					} else {
@@ -310,7 +322,10 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 					if p.settings.acknowledgementTimeout > 0 {
 						time.Sleep(p.settings.acknowledgementTimeout)
 					}
-					conn.Write([]byte{utilities.ACK})
+					_, err = conn.Write([]byte{utilities.ACK})
+					if err != nil {
+						fsm.Init()
+					}
 				default:
 					protocolMsg := protocolMessage{
 						Status: ERROR,
@@ -345,29 +360,108 @@ func (p *beckmanSpecialProtocol) Receive(conn net.Conn) ([]byte, error) {
 }
 
 func (p *beckmanSpecialProtocol) Send(conn net.Conn, data [][]byte) (int, error) {
-	msgBuff := make([]byte, 0)
+	p.asyncSendActive.Add(1)
+	defer p.asyncSendActive.Done()
+
+	conn.SetReadDeadline(time.Now())
+	p.asyncReadActive.Wait()
+	conn.SetReadDeadline(time.Time{}) // Reset timeline
 
 	// Maybe need to wait until the answer of the instrument
 	for _, buff := range data {
 		if len(buff) > 1 {
-			msgBuff = append(msgBuff, p.settings.startByte)
+			msgBuff := make([]byte, 0)
+			if p.settings.acknowledgementTimeout > 0 {
+				time.Sleep(p.settings.acknowledgementTimeout)
+			}
+			_, err := conn.Write([]byte{p.settings.startByte})
+			if err != nil {
+				return 0, err
+			}
+
+			receivingMsg, err := p.receiveSendAnswer(conn)
+			if err != nil {
+				return -1, err
+			}
+			switch receivingMsg {
+			case utilities.ACK:
+			case utilities.NAK:
+				return -1, fmt.Errorf("instrument(lis1a1) did not accept any data")
+			default:
+				fmt.Printf("Warning: Recieved unexpected bytes in transmission (ignoring them) : %c ascii: %d\n", receivingMsg, receivingMsg)
+				continue // ignore all characters until ACK
+			}
+
+			if p.settings.acknowledgementTimeout > 0 {
+				time.Sleep(p.settings.acknowledgementTimeout)
+			}
+
 			msgBuff = append(msgBuff, buff...)
 			msgBuff = append(msgBuff, p.settings.endByte)
+			_, err = conn.Write(msgBuff)
+			if err != nil {
+				return -1, err
+			}
 		} else {
-			msgBuff = append(msgBuff, buff...)
+			// Send and wait for answer#
+			if p.settings.acknowledgementTimeout > 0 {
+				time.Sleep(p.settings.acknowledgementTimeout)
+			}
+			_, err := conn.Write(buff)
+			if err != nil {
+				return 0, err
+			}
+
+			receivingMsg, err := p.receiveSendAnswer(conn)
+			if err != nil {
+				return -1, err
+			}
+			switch receivingMsg {
+			case utilities.ACK:
+				continue
+			case utilities.NAK:
+				return -1, fmt.Errorf("instrument(lis1a1) did not accept any data")
+			default:
+				fmt.Printf("Warning: Recieved unexpected bytes in transmission (ignoring them) : %c ascii: %d\n", receivingMsg, receivingMsg)
+				continue // ignore all characters until ACK
+			}
+
 		}
 	}
 
-	if os.Getenv("BNETDEBUG") == "true" {
-		fmt.Printf(`sending buffer: %+v`, msgBuff)
+	return 0, nil
+}
+
+func (p *beckmanSpecialProtocol) receiveSendAnswer(conn net.Conn) (byte, error) {
+	err := conn.SetReadDeadline(time.Now().Add(time.Second * p.settings.sendTimeoutDuration))
+	if err != nil {
+		return 0, ReceiverDoesNotRespond
 	}
 
-	return conn.Write(msgBuff)
+	receivingMsg := make([]byte, 1)
+	_, err = conn.Read(receivingMsg)
+	if err != nil {
+		return 0, err
+	}
+
+	switch receivingMsg[0] {
+	case utilities.ACK:
+		// was successfully do next
+		return utilities.ACK, nil
+	case utilities.NAK:
+		// Last was not successfully do next
+		return utilities.NAK, nil
+	default:
+		return 0, ReceivedMessageIsInvalid
+	}
+
 }
 
 func (p *beckmanSpecialProtocol) NewInstance() Implementation {
 	return &beckmanSpecialProtocol{
-		settings: p.settings,
-		receiveQ: make(chan protocolMessage),
+		settings:        p.settings,
+		receiveQ:        make(chan protocolMessage),
+		asyncReadActive: sync.WaitGroup{},
+		asyncSendActive: sync.WaitGroup{},
 	}
 }
