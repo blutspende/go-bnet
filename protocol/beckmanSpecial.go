@@ -386,7 +386,7 @@ func (p *beckmanSpecialProtocol) Send(conn net.Conn, data [][]byte) (int, error)
 			switch receivingMsg {
 			case utilities.ACK:
 			case utilities.NAK:
-				return -1, fmt.Errorf("instrument(lis1a1) did not accept any data")
+				return -1, fmt.Errorf("instrument(beckmanSpecial) did not accept startByte")
 			default:
 				fmt.Printf("Warning: Recieved unexpected bytes in transmission (ignoring them) : %c ascii: %d\n", receivingMsg, receivingMsg)
 				continue // ignore all characters until ACK
@@ -420,7 +420,7 @@ func (p *beckmanSpecialProtocol) Send(conn net.Conn, data [][]byte) (int, error)
 			case utilities.ACK:
 				continue
 			case utilities.NAK:
-				return -1, fmt.Errorf("instrument(lis1a1) did not accept any data")
+				return -1, fmt.Errorf("instrument(beckmanSpecial) did not accept any data")
 			default:
 				fmt.Printf("Warning: Recieved unexpected bytes in transmission (ignoring them) : %c ascii: %d\n", receivingMsg, receivingMsg)
 				continue // ignore all characters until ACK
