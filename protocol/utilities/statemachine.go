@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	InvalidCharacterError = errors.New("invalid character")
+	ErrInvalidCharacter = errors.New("invalid character")
 )
 
 type ActionCode string
@@ -29,13 +29,14 @@ const (
 	Init State = iota
 )
 
-// Rule struct for Rule
+// The rule describes the transtion from each state to another. The transition
+// is performed with every new character.
 type Rule struct {
-	FromState  State
-	Symbols    []byte
-	ToState    State
-	ActionCode ActionCode
-	Scan       bool
+	FromState  State      // Current state
+	Symbols    []byte     // Any of these symbols will trigger this transition
+	ToState    State      // Target state of transition
+	ActionCode ActionCode // Define an action to perform when this rule is used
+	Scan       bool       // If enabled the character is added to the buffer
 }
 
 type FiniteStateMachine interface {
@@ -116,7 +117,7 @@ func (s *fsm) findMatchingRule(token byte) (Rule, error) {
 			return rule, nil
 		}
 	}
-	return Rule{}, fmt.Errorf(`%w : "%s" ascii: %q currentBuffer: "%s" , status of fsm: %d`, InvalidCharacterError, string(token), token, string(s.currentBuffer), s.currentState)
+	return Rule{}, fmt.Errorf(`%w : "%s" ascii: %q currentBuffer: "%s" , status of fsm: %d`, ErrInvalidCharacter, string(token), token, string(s.currentBuffer), s.currentState)
 }
 
 func (s *fsm) Init() {

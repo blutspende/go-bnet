@@ -1,12 +1,16 @@
 package utilities
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 const LineReceived ActionCode = "LineReceived"
 
+/**
+This tests uses one of the basic requirements for the FSM: the LIS1A1 protocol.
+**/
 func TestBasic(t *testing.T) {
 	automate := CreateFSM([]Rule{
 		{FromState: Init, Symbols: []byte{ENQ}, ToState: 1, Scan: false},
@@ -96,7 +100,7 @@ func TestBasic(t *testing.T) {
 			buffer, action, err := automate.Push(token)
 			switch action {
 			case Error:
-				assert.ErrorIs(t, err, InvalidCharacterError)
+				assert.ErrorIs(t, err, ErrInvalidCharacter)
 			case LineReceived:
 				println(string(buffer))
 				exampleResult = append(exampleResult, buffer...)
@@ -105,6 +109,7 @@ func TestBasic(t *testing.T) {
 				println(string(buffer))
 				automate.ResetBuffer()
 			case Finish:
+				// The end of the machine = recoginzed the message
 				assert.Equal(t, exampleMessage, string(exampleResult))
 			case Ok:
 				// all fine

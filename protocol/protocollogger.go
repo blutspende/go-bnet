@@ -5,15 +5,32 @@ import (
 	"net"
 	"os"
 	"time"
+
+	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 )
 
+type LogType string
+
+const LogTypeInfo LogType = "info"
+const LogTypeSend LogType = "send"
+const LogTypeRecv LogType = "recv"
+const LogTypeFail LogType = "fail"
+const LogTypeClos LogType = "clos"
+
+type LogAdapter interface {
+	logMessage(timestamp time.Time, ltype LogType, msg string, payload []byte)
+}
 type protocolLogger struct {
-	enableLog bool
-	protocol  Implementation
+	enableLog  bool
+	protocol   Implementation
+	logAdapter LogAdapter
 }
 
 func (pl *protocolLogger) Interrupt() {
-	fmt.Printf("PL|%s| interrupt connection\n", time.Now().Format("20060102 150405.0"))
+	if pl.logAdapter != nil {
+		pl.logAdapter.logMessage(time.Now(), LogTypeInfo, "interrupted connection", []byte{})
+	}
+	fmt.Printf("PL|%s| info - interrupt connection\n", time.Now().Format("20060102 150405.0"))
 	pl.protocol.Interrupt()
 }
 
@@ -25,7 +42,11 @@ func (pl *protocolLogger) logRead(n int, err error, datafull []byte) {
 			return
 		}
 
-		fmt.Printf("PL|%s| recv - (error) '%s'\n", time.Now().Format("20060102 150405.0"), err.Error())
+		if pl.logAdapter != nil {
+			pl.logAdapter.logMessage(time.Now(), LogTypeFail, err.Error(), []byte{})
+		}
+
+		fmt.Printf("PL|%s| fail - '%s'\n", time.Now().Format("20060102 150405.0"), err.Error())
 		return
 	}
 
@@ -34,12 +55,21 @@ func (pl *protocolLogger) logRead(n int, err error, datafull []byte) {
 		peek = peek + "..."
 	}
 
+	if pl.logAdapter != nil {
+		pl.logAdapter.logMessage(time.Now(), LogTypeRecv, peek, datafull)
+	}
+
 	fmt.Printf("PL|%s| recv - (%d bytes) '%s' \n", time.Now().Format("20060102 150405.0"), n, peek)
 }
 
 func (pl *protocolLogger) logWrite(n int, err error, datafull []byte) {
 
 	if err != nil {
+
+		if pl.logAdapter != nil {
+			pl.logAdapter.logMessage(time.Now(), LogTypeFail, err.Error(), []byte{})
+		}
+
 		fmt.Printf("PL|%s| send - (error) '%s'\n", time.Now().Format("20060102 150405.0"), err.Error())
 		return
 	}
@@ -48,10 +78,18 @@ func (pl *protocolLogger) logWrite(n int, err error, datafull []byte) {
 	if len(datafull) > 30 {
 		peek = peek + "..."
 	}
+	if pl.logAdapter != nil {
+		pl.logAdapter.logMessage(time.Now(), LogTypeSend, peek, datafull)
+	}
 	fmt.Printf("PL|%s| send - (%d bytes) '%s'\n", time.Now().Format("20060102 150405.0"), n, peek)
 }
 
 func (pl *protocolLogger) logClose(peer string) {
+
+	if pl.logAdapter != nil {
+		pl.logAdapter.logMessage(time.Now(), LogTypeClos, peer, []byte{})
+	}
+
 	fmt.Printf("PL|%s| close|\n", time.Now().Format("20060102 150405.0"))
 }
 
@@ -88,46 +126,25 @@ func Logger(protocol Implementation) Implementation {
 	return protoLogger
 }
 
-var ASCIIMap = map[byte]string{
-	0:  "<NUL>",
-	1:  "<SOH>",
-	2:  "<STX>",
-	3:  "<ETX>",
-	4:  "<EOT>",
-	5:  "<ENQ>",
-	6:  "<ACK>",
-	7:  "<BEL>",
-	8:  "<BS>",
-	9:  "<HT>",
-	10: "<LF>",
-	11: "<VT>",
-	12: "<FF>",
-	13: "<CR>",
-	14: "<SO>",
-	15: "<SI>",
-	16: "<DLE>",
-	17: "<DC1>",
-	18: "<DC2>",
-	19: "<DC3>",
-	20: "<DC4>",
-	21: "<NAK>",
-	22: "<SYN>",
-	23: "<ETB>",
-	24: "<CAN>",
-	25: "<EM>",
-	26: "<SUB>",
-	27: "<ESC>",
-	28: "<FS>",
-	29: "<GS>",
-	30: "<RS>",
-	31: "<US>",
+func LoggerWithAdapter(protocol Implementation, logAdapter LogAdapter) Implementation {
+	protoLogger := &protocolLogger{
+		enableLog:  os.Getenv("PROTOLOG_ENABLE") != "",
+		protocol:   protocol,
+		logAdapter: logAdapter,
+	}
+
+	if protoLogger.enableLog {
+		fmt.Printf("PL|%s| start - protocol logging is enabled\n", time.Now().Format("20060102 150405.0"))
+	}
+
+	return protoLogger
 }
 
 func makeBytesReadable(in []byte) string {
 	ret := ""
 	for i := 0; i < len(in); i++ {
 		if in[i] < 32 {
-			ret = ret + ASCIIMap[in[i]]
+			ret = ret + utilities.ASCIIMapNotPrintable[in[i]]
 		} else {
 			ret = ret + string(in[i])
 		}

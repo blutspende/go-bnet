@@ -3,7 +3,6 @@ package bloodlabnet
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"fmt"
 	"os"
 	"path"
 	"testing"
@@ -27,7 +26,6 @@ func (th *testFtpHandler) Connected(session Session) error {
 func (th *testFtpHandler) DataReceived(session Session, data []byte, receiveTimestamp time.Time) error {
 	th.dataReceived = true
 	th.receiveQ <- data
-	fmt.Println("Got something")
 	return nil
 }
 

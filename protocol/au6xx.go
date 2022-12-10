@@ -1,5 +1,9 @@
 package protocol
 
+/*
+Implementation of the Beckman&Coulter AU6xx low-level protocol.
+*/
+
 import (
 	"fmt"
 	"io"
