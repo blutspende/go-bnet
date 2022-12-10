@@ -128,7 +128,7 @@ func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
 
 	// CHECK For If CheckSumCheck is enabled
 	return []utilities.Rule{
-		{FromState: 0, Symbols: []byte{p.settings.startByte}, ToState: 1, ActionCode: JustAck, Scan: false},
+		{FromState: 0, Symbols: []byte{p.settings.startByte}, ToState: 1, Scan: false},
 		{FromState: 1, Symbols: []byte{'D', 'S', 'd'}, ToState: 2, Scan: true},
 		{FromState: 1, Symbols: []byte{'R'}, ToState: 10, Scan: true},
 
@@ -138,7 +138,7 @@ func (p *beckmanSpecialProtocol) generateRules() []utilities.Rule {
 		{FromState: 11, Symbols: []byte{p.settings.endByte}, ToState: 12, ActionCode: LineReceived, Scan: false},
 		{FromState: 11, Symbols: utilities.PrintableChars8Bit, ToState: 11, Scan: true},
 		{FromState: 12, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 13, Scan: false},
-		{FromState: 13, Symbols: []byte{p.settings.startByte}, ToState: 1, ActionCode: JustAck, Scan: false},
+		{FromState: 13, Symbols: []byte{p.settings.startByte}, ToState: 1, Scan: false},
 		{FromState: 13, Symbols: []byte{utilities.NAK}, ToState: 13, ActionCode: RetransmitLastMessage, Scan: false},
 		{FromState: 13, Symbols: []byte{utilities.ACK}, ToState: 13, Scan: false},
 
@@ -318,14 +318,14 @@ func (p *beckmanSpecialProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 					fileBuffer = make([][]byte, 0)
 					fsm.ResetBuffer()
 					fsm.Init()
-				case JustAck:
-					if p.settings.acknowledgementTimeout > 0 {
-						time.Sleep(p.settings.acknowledgementTimeout)
-					}
-					_, err = conn.Write([]byte{utilities.ACK})
-					if err != nil {
-						fsm.Init()
-					}
+				//case JustAck:
+				//	if p.settings.acknowledgementTimeout > 0 {
+				//		time.Sleep(p.settings.acknowledgementTimeout)
+				//	}
+				//	_, err = conn.Write([]byte{utilities.ACK})
+				//	if err != nil {
+				//		fsm.Init()
+				//	}
 				default:
 					protocolMsg := protocolMessage{
 						Status: ERROR,
@@ -369,63 +369,16 @@ func (p *beckmanSpecialProtocol) Send(conn net.Conn, data [][]byte) (int, error)
 
 	// Maybe need to wait until the answer of the instrument
 	for _, buff := range data {
-		if len(buff) > 1 {
-			msgBuff := make([]byte, 0)
-			if p.settings.acknowledgementTimeout > 0 {
-				time.Sleep(p.settings.acknowledgementTimeout)
-			}
-			_, err := conn.Write([]byte{p.settings.startByte})
-			if err != nil {
-				return 0, err
-			}
-
-			receivingMsg, err := p.receiveSendAnswer(conn)
-			if err != nil {
-				return -1, err
-			}
-			switch receivingMsg {
-			case utilities.ACK:
-			case utilities.NAK:
-				return -1, fmt.Errorf("instrument(beckmanSpecial) did not accept startByte")
-			default:
-				fmt.Printf("Warning: Recieved unexpected bytes in transmission (ignoring them) : %c ascii: %d\n", receivingMsg, receivingMsg)
-				continue // ignore all characters until ACK
-			}
-
-			if p.settings.acknowledgementTimeout > 0 {
-				time.Sleep(p.settings.acknowledgementTimeout)
-			}
-
-			msgBuff = append(msgBuff, buff...)
-			msgBuff = append(msgBuff, p.settings.endByte)
-			_, err = conn.Write(msgBuff)
-			if err != nil {
-				return -1, err
-			}
-		} else {
-			// Send and wait for answer#
-			if p.settings.acknowledgementTimeout > 0 {
-				time.Sleep(p.settings.acknowledgementTimeout)
-			}
-			_, err := conn.Write(buff)
-			if err != nil {
-				return 0, err
-			}
-
-			receivingMsg, err := p.receiveSendAnswer(conn)
-			if err != nil {
-				return -1, err
-			}
-			switch receivingMsg {
-			case utilities.ACK:
-				continue
-			case utilities.NAK:
-				return -1, fmt.Errorf("instrument(beckmanSpecial) did not accept any data")
-			default:
-				fmt.Printf("Warning: Recieved unexpected bytes in transmission (ignoring them) : %c ascii: %d\n", receivingMsg, receivingMsg)
-				continue // ignore all characters until ACK
-			}
-
+		msgBuff := make([]byte, 0)
+		if p.settings.acknowledgementTimeout > 0 {
+			time.Sleep(p.settings.acknowledgementTimeout)
+		}
+		msgBuff = append(msgBuff, p.settings.startByte)
+		msgBuff = append(msgBuff, buff...)
+		msgBuff = append(msgBuff, p.settings.endByte)
+		_, err := conn.Write(msgBuff)
+		if err != nil {
+			return -1, err
 		}
 	}
 

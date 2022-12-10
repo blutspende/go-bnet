@@ -19,23 +19,23 @@ func TestOneMessageRequestResponse(t *testing.T) {
 	go func() { // This is the instrument (you must become the instrument yourself to read it)
 		const expectedLatency_inMs_TimesTwo = 40 // ms
 		buffer_1Byte := make([]byte, 1)          // including STX and 0A in the transmission
-		buffer_32Bytes := make([]byte, 32)       // including STX and 0A in the transmission
+		buffer_33Bytes := make([]byte, 33)       // including STX and 0A in the transmission
 
-		//-- send STX
-		_, err := instrument.Write([]byte{utilities.STX}) // no bcc)
-		FirstSTXSentTime := time.Now()
-		assert.Nil(t, err)
-
-		//-- expect ACK
-		_, err = instrument.Read(buffer_1Byte)
-		FirstACKReceiveTime := time.Now()
-		assert.Nil(t, err)
-		assert.Equal(t, []byte{utilities.ACK}, buffer_1Byte)
-		assert.LessOrEqual(t, int64(500), FirstACKReceiveTime.Sub(FirstSTXSentTime).Milliseconds())
-		assert.GreaterOrEqual(t, int64(2000-expectedLatency_inMs_TimesTwo), FirstACKReceiveTime.Sub(FirstSTXSentTime).Milliseconds())
+		////-- send STX
+		//_, err := instrument.Write([]byte{utilities.STX}) // no bcc)
+		//FirstSTXSentTime := time.Now()
+		//assert.Nil(t, err)
+		//
+		////-- expect ACK
+		//_, err = instrument.Read(buffer_1Byte)
+		//FirstACKReceiveTime := time.Now()
+		//assert.Nil(t, err)
+		//assert.Equal(t, []byte{utilities.ACK}, buffer_1Byte)
+		//assert.LessOrEqual(t, int64(500), FirstACKReceiveTime.Sub(FirstSTXSentTime).Milliseconds())
+		//assert.GreaterOrEqual(t, int64(2000-expectedLatency_inMs_TimesTwo), FirstACKReceiveTime.Sub(FirstSTXSentTime).Milliseconds())
 
 		//-- Send RB03 (Start of Request block)
-		_, err = instrument.Write([]byte{'R', 'B', '0', '3', utilities.LF}) // no bcc)
+		_, err := instrument.Write([]byte{utilities.STX, 'R', 'B', '0', '3', utilities.LF}) // no bcc)
 		timeOf_RequestBlock := time.Now()
 		assert.Nil(t, err)
 
@@ -51,20 +51,20 @@ func TestOneMessageRequestResponse(t *testing.T) {
 		time.Sleep(2000*time.Millisecond + expectedLatency_inMs_TimesTwo)
 
 		//-- send STX (to start the Request)
-		_, err = instrument.Write([]byte{utilities.STX}) // no bcc)
-		timeOf_FirstRequestSTX := time.Now()
-		assert.Nil(t, err)
-
-		//-- expect ACK (for the start of request)
-		_, err = instrument.Read(buffer_1Byte)
-		timeOf_3rdAck := time.Now()
-		assert.Nil(t, err)
-		assert.Equal(t, []byte{utilities.ACK}, buffer_1Byte)
-		assert.LessOrEqual(t, int64(500), timeOf_3rdAck.Sub(timeOf_FirstRequestSTX).Milliseconds())
-		assert.GreaterOrEqual(t, int64(2000-expectedLatency_inMs_TimesTwo), timeOf_3rdAck.Sub(timeOf_FirstRequestSTX).Milliseconds())
+		//_, err = instrument.Write([]byte{utilities.STX}) // no bcc)
+		//timeOf_FirstRequestSTX := time.Now()
+		//assert.Nil(t, err)
+		//
+		////-- expect ACK (for the start of request)
+		//_, err = instrument.Read(buffer_1Byte)
+		//timeOf_3rdAck := time.Now()
+		//assert.Nil(t, err)
+		//assert.Equal(t, []byte{utilities.ACK}, buffer_1Byte)
+		//assert.LessOrEqual(t, int64(500), timeOf_3rdAck.Sub(timeOf_FirstRequestSTX).Milliseconds())
+		//assert.GreaterOrEqual(t, int64(2000-expectedLatency_inMs_TimesTwo), timeOf_3rdAck.Sub(timeOf_FirstRequestSTX).Milliseconds())
 
 		//-- Send R_ Request Message for instrument
-		instrument.Write([]byte{'R', ' ', '0', '3', /*instrument#*/
+		instrument.Write([]byte{utilities.STX, 'R', ' ', '0', '3', /*instrument#*/
 			'1', '1', '1', '1', /* RACK# */
 			'0', '1', /*CUP*/
 			' ',                /* Sample Type */
@@ -82,28 +82,28 @@ func TestOneMessageRequestResponse(t *testing.T) {
 		assert.Equal(t, []byte{utilities.ACK}, buffer_1Byte)
 
 		//-- expect STX (for the answer, always looking for answers :D)
-		instrument.Read(buffer_1Byte)
-		timeOf_SMessageSTX := time.Now()
-		assert.Equal(t, []byte{utilities.STX}, buffer_1Byte)
-		assert.LessOrEqual(t, int64(522-expectedLatency_inMs_TimesTwo), timeOf_SMessageSTX.Sub(timeOf_4thAck).Milliseconds()) // NOT sure here maybe other timings
-		assert.GreaterOrEqual(t, int64(2000-expectedLatency_inMs_TimesTwo), timeOf_SMessageSTX.Sub(timeOf_4thAck).Milliseconds())
-
-		// wait for 0.5 secs
-		time.Sleep(500*time.Millisecond + expectedLatency_inMs_TimesTwo) // TODO: Check if that was not 2 secs
-
-		//-- Send ACK to confirm the start of message
-		_, err = instrument.Write([]byte{utilities.ACK})
-		timeOf_SendingAckForSTXforSMessage := time.Now()
-		assert.Nil(t, err)
+		//instrument.Read(buffer_1Byte)
+		//timeOf_SMessageSTX := time.Now()
+		//assert.Equal(t, []byte{utilities.STX}, buffer_1Byte)
+		//assert.LessOrEqual(t, int64(522-expectedLatency_inMs_TimesTwo), timeOf_SMessageSTX.Sub(timeOf_4thAck).Milliseconds()) // NOT sure here maybe other timings
+		//assert.GreaterOrEqual(t, int64(2000-expectedLatency_inMs_TimesTwo), timeOf_SMessageSTX.Sub(timeOf_4thAck).Milliseconds())
+		//
+		//// wait for 0.5 secs
+		//time.Sleep(500*time.Millisecond + expectedLatency_inMs_TimesTwo) // TODO: Check if that was not 2 secs
+		//
+		////-- Send ACK to confirm the start of message
+		//_, err = instrument.Write([]byte{utilities.ACK})
+		//timeOf_SendingAckForSTXforSMessage := time.Now()
+		//assert.Nil(t, err)
 
 		//! here must be 0,5 seconds (t4) !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-		instrument.Read(buffer_32Bytes)
+		instrument.Read(buffer_33Bytes)
 		timeOf_AfterSMessageRead := time.Now()
 		// the transmission of 31 bytes takes 522 ms ! instrument has 9600 boud but the test environment has about 50 mio boud
-		assert.LessOrEqual(t, int64(500), timeOf_AfterSMessageRead.Sub(timeOf_SendingAckForSTXforSMessage).Milliseconds())
-		assert.GreaterOrEqual(t, int64(2522-expectedLatency_inMs_TimesTwo), timeOf_AfterSMessageRead.Sub(timeOf_SendingAckForSTXforSMessage).Milliseconds())
-		assert.Equal(t, []byte("S 34567890123456789012345678901\n"), buffer_32Bytes)
+		assert.LessOrEqual(t, int64(500), timeOf_AfterSMessageRead.Sub(timeOf_4thAck).Milliseconds())
+		assert.GreaterOrEqual(t, int64(2522-expectedLatency_inMs_TimesTwo), timeOf_AfterSMessageRead.Sub(timeOf_4thAck).Milliseconds())
+		assert.Equal(t, append([]byte{utilities.STX}, []byte("S 34567890123456789012345678901\n")...), buffer_33Bytes)
 
 		// wait for 0.5 secs
 		time.Sleep(500*time.Millisecond + expectedLatency_inMs_TimesTwo)
@@ -117,16 +117,17 @@ func TestOneMessageRequestResponse(t *testing.T) {
 		time.Sleep(2000*time.Millisecond + expectedLatency_inMs_TimesTwo)
 
 		//-- send STX (to start the Request)
-		_, err = instrument.Write([]byte{utilities.STX}) // no bcc)
+		//_, err = instrument.Write([]byte{utilities.STX}) // no bcc)
+		//timeOf_EndTransferSTX := time.Now()
+		//assert.Nil(t, err)
+
+		//_, err = instrument.Read(buffer_1Byte)
+		//assert.LessOrEqual(t, int64(500), time.Now().Sub(timeOf_EndTransferSTX).Milliseconds())
+		//assert.GreaterOrEqual(t, int64(2000-expectedLatency_inMs_TimesTwo), time.Now().Sub(timeOf_EndTransferSTX).Milliseconds())
+		//assert.Equal(t, []byte{utilities.ACK}, buffer_1Byte)
+
+		_, err = instrument.Write([]byte{utilities.STX, 'R', 'E', '0', '3', utilities.LF})
 		timeOf_EndTransferSTX := time.Now()
-		assert.Nil(t, err)
-
-		_, err = instrument.Read(buffer_1Byte)
-		assert.LessOrEqual(t, int64(500), time.Now().Sub(timeOf_EndTransferSTX).Milliseconds())
-		assert.GreaterOrEqual(t, int64(2000-expectedLatency_inMs_TimesTwo), time.Now().Sub(timeOf_EndTransferSTX).Milliseconds())
-		assert.Equal(t, []byte{utilities.ACK}, buffer_1Byte)
-
-		_, err = instrument.Write([]byte{'R', 'E', '0', '3', utilities.LF})
 		assert.Nil(t, err)
 
 		//++ expect ACK
