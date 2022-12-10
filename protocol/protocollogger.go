@@ -76,10 +76,16 @@ func (pl *protocolLogger) NewInstance() Implementation {
 }
 
 func Logger(protocol Implementation) Implementation {
-	return &protocolLogger{
+	protoLogger := &protocolLogger{
 		enableLog: os.Getenv("PROTOLOG_ENABLE") != "",
 		protocol:  protocol,
 	}
+
+	if protoLogger.enableLog {
+		fmt.Printf("PL|%s| start - protocol logging is enabled\n", time.Now().Format("20060102 150405.0"))
+	}
+
+	return protoLogger
 }
 
 var ASCIIMap = map[byte]string{
