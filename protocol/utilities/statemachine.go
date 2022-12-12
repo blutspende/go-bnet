@@ -14,13 +14,14 @@ var (
 type ActionCode string
 
 const (
-	Consumed       ActionCode = ""
-	Ok             ActionCode = ""
-	Start          ActionCode = "Start"
-	CheckSum       ActionCode = "CheckSum"
-	ProcessMessage ActionCode = "ProcessMessage"
-	Error          ActionCode = "Error"
-	Finish         ActionCode = "Finish"
+	Consumed        ActionCode = ""
+	Ok              ActionCode = ""
+	Start           ActionCode = "Start"
+	CheckSum        ActionCode = "CheckSum"
+	ProcessMessage  ActionCode = "ProcessMessage"
+	Error           ActionCode = "Error"
+	RequestFinished ActionCode = "RequestFinished"
+	Finished        ActionCode = "Finished"
 )
 
 type State int

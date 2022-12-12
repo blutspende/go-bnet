@@ -30,7 +30,7 @@ func TestBasic(t *testing.T) {
 
 		{FromState: 10, Symbols: []byte{STX}, ToState: 2, Scan: false},
 		{FromState: 10, Symbols: []byte{ETB}, ToState: Init, Scan: false},
-		{FromState: 10, Symbols: []byte{EOT}, ToState: Init, Scan: false, ActionCode: Finish},
+		{FromState: 10, Symbols: []byte{EOT}, ToState: Init, Scan: false, ActionCode: Finished},
 	})
 
 	communicationFlow := [][]byte{
@@ -108,7 +108,7 @@ func TestBasic(t *testing.T) {
 			case CheckSum:
 				println(string(buffer))
 				automate.ResetBuffer()
-			case Finish:
+			case Finished:
 				// The end of the machine = recoginzed the message
 				assert.Equal(t, exampleMessage, string(exampleResult))
 			case Ok:

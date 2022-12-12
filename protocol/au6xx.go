@@ -135,7 +135,7 @@ func (p *au6xxProtocol) generateRules() []utilities.Rule {
 		{FromState: 1, Symbols: []byte{'R'}, ToState: 10, Scan: true},
 
 		{FromState: 10, Symbols: []byte{'B'}, ToState: 14, Scan: true},
-		{FromState: 10, Symbols: []byte{'E'}, ToState: 7, Scan: true},
+		{FromState: 10, Symbols: []byte{'E'}, ToState: 15, Scan: true},
 		{FromState: 10, Symbols: printableChars8BitWithoutE, ToState: 11, ActionCode: RequestStart, Scan: true},
 		{FromState: 11, Symbols: []byte{p.settings.endByte}, ToState: 12, ActionCode: LineReceived, Scan: false},
 		{FromState: 11, Symbols: utilities.PrintableChars8Bit, ToState: 11, Scan: true},
@@ -156,10 +156,13 @@ func (p *au6xxProtocol) generateRules() []utilities.Rule {
 		{FromState: 5, Symbols: []byte{p.settings.startByte}, ToState: 1, Scan: false},
 
 		{FromState: 2, Symbols: []byte{'E'}, ToState: 7, Scan: true},
-		{FromState: 7, Symbols: []byte{p.settings.endByte}, ToState: 0, ActionCode: utilities.Finish, Scan: false},
+		{FromState: 7, Symbols: []byte{p.settings.endByte}, ToState: 15, ActionCode: utilities.Finished, Scan: false},
 		{FromState: 7, Symbols: utilities.PrintableChars8Bit, ToState: 7, Scan: true},
 		//utilities.Rule{FromState: 8, Symbols: utilities.PrintableChars8Bit, ToState: 9, ActionCode: utilities.CheckSum, Scan: true},
-		{FromState: 9, Symbols: utilities.PrintableChars8Bit, ToState: 0, ActionCode: utilities.Finish, Scan: false},
+		{FromState: 9, Symbols: utilities.PrintableChars8Bit, ToState: 0, ActionCode: utilities.Finished, Scan: false},
+		{FromState: 15, Symbols: []byte{p.settings.endByte}, ToState: 16, ActionCode: utilities.RequestFinished, Scan: false},
+		{FromState: 15, Symbols: utilities.PrintableChars8Bit, ToState: 15, Scan: true},
+		{FromState: 16, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 0},
 	}
 }
 
@@ -286,7 +289,23 @@ func (p *au6xxProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 						Status: DATA,
 						Data:   lastMessage,
 					}
-				case utilities.Finish:
+
+				case utilities.RequestFinished:
+					time.Sleep(p.settings.acknowledgementTimeout)
+					_, err = conn.Write([]byte{utilities.ACK})
+					if err != nil {
+						fmt.Printf("can not send ACK in Finish. Should never happen\n")
+						fsm.Init()
+					}
+					time.Sleep(p.settings.acknowledgementTimeout)
+					_, err = conn.Write([]byte{utilities.STX, 'S', 'E', p.settings.endByte})
+					if err != nil {
+						fmt.Printf("can not send ACK in Finish. Should never happen\n")
+						fsm.Init()
+					}
+					fileBuffer = make([][]byte, 0)
+					fsm.ResetBuffer()
+				case utilities.Finished:
 					// send fileData if not request
 					if p.settings.acknowledgementTimeout > 0 {
 						time.Sleep(p.settings.acknowledgementTimeout)
@@ -297,25 +316,21 @@ func (p *au6xxProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 						fsm.Init()
 					}
 
-					if p.state.isRequest {
-						p.state.isRequest = false
-					} else {
-						fullMsg := make([]byte, 0)
-						for _, messageLine := range fileBuffer {
-							// skip first element because this is only RecordType + unitNo not needed in instrumentAPI
-							if len(messageLine) <= 5 {
-								continue
-							}
-							fullMsg = append(fullMsg, messageLine...)
-							fullMsg = append(fullMsg, p.settings.lineBreak)
+					fullMsg := make([]byte, 0)
+					for _, messageLine := range fileBuffer {
+						// skip first element because this is only RecordType + unitNo not needed in instrumentAPI
+						if len(messageLine) <= 5 {
+							continue
 						}
+						fullMsg = append(fullMsg, messageLine...)
+						fullMsg = append(fullMsg, p.settings.lineBreak)
+					}
 
-						// Send only if data are set
-						if len(fullMsg) > 0 {
-							p.receiveQ <- protocolMessage{
-								Status: DATA,
-								Data:   fullMsg,
-							}
+					// Send only if data are set
+					if len(fullMsg) > 0 {
+						p.receiveQ <- protocolMessage{
+							Status: DATA,
+							Data:   fullMsg,
 						}
 					}
 					fileBuffer = make([][]byte, 0)

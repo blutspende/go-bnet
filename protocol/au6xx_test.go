@@ -20,6 +20,7 @@ func TestOneMessageRequestResponse(t *testing.T) {
 		const expectedLatency_inMs_TimesTwo = 40 // ms
 		buffer_1Byte := make([]byte, 1)          // including STX and 0A in the transmission
 		buffer_33Bytes := make([]byte, 33)       // including STX and 0A in the transmission
+		buffer_SE := make([]byte, 4)
 
 		//-- Send RB03 (Start of Request block)
 		_, err := instrument.Write([]byte{utilities.STX, 'R', 'B', '0', '3', utilities.LF}) // no bcc)
@@ -85,8 +86,16 @@ func TestOneMessageRequestResponse(t *testing.T) {
 		assert.GreaterOrEqual(t, int64(2000-expectedLatency_inMs_TimesTwo), timeOf_6thAck.Sub(timeOf_EndTransferSTX).Milliseconds())
 		assert.Equal(t, []byte{utilities.ACK}, buffer_1Byte)
 
-		// Sending a byte with a wrong symbol to stop the test
-		instrument.Write([]byte{'?'})
+		_, err = instrument.Read(buffer_SE)
+		timeOf_SE := time.Now()
+		assert.Nil(t, err)
+		assert.LessOrEqual(t, int64(500), timeOf_SE.Sub(timeOf_6thAck).Milliseconds())
+		assert.GreaterOrEqual(t, int64(2000-expectedLatency_inMs_TimesTwo), timeOf_6thAck.Sub(timeOf_EndTransferSTX).Milliseconds())
+		assert.Equal(t, []byte{utilities.STX, 'S', 'E', utilities.LF}, buffer_SE)
+
+		time.Sleep(500 * time.Millisecond)
+		_, err = instrument.Write([]byte{utilities.ACK})
+		assert.Nil(t, err)
 	}()
 
 	// from here on we become the host :) - (thats ourselfes)
@@ -106,8 +115,9 @@ func TestOneMessageRequestResponse(t *testing.T) {
 	// Need to wait here. Because some timing issue by the host
 	time.Sleep(time.Second)
 
-	_, err = instance.NewInstance().Receive(host)
-	assert.ErrorContainsf(t, err, `invalid character : "?"`, "")
+	ackBytes, err := instance.NewInstance().Receive(host)
+	assert.Equal(t, []byte{}, ackBytes)
+	//assert.ErrorContainsf(t, err, `invalid character : "?"`, "")
 }
 
 func TestMultipleMessageRequestResponse(t *testing.T) {
