@@ -200,9 +200,9 @@ func TestTCPServerMaxConnections(t *testing.T) {
 	tcpServer.Stop()
 }
 
-//------------------------------------------------------
+// ------------------------------------------------------
 // Server identifies the remote-Address
-//------------------------------------------------------
+// ------------------------------------------------------
 func TestTCPServerIdentifyRemoteAddress(t *testing.T) {
 	tcpServer := CreateNewTCPServerInstance(4005,
 		protocol.Raw(protocol.DefaultRawProtocolSettings()),
@@ -223,9 +223,9 @@ func TestTCPServerIdentifyRemoteAddress(t *testing.T) {
 	assert.Equal(t, "127.0.0.1", handlerTcp.lastConnectedIp)
 }
 
-//--------------------------------------------------------------
+// --------------------------------------------------------------
 // Test STX Protocol
-//--------------------------------------------------------------
+// --------------------------------------------------------------
 type testSTXETXProtocolSession struct {
 	receiveQ                    chan []byte
 	didReceiveDisconnectMessage bool
@@ -302,16 +302,16 @@ func TestSTXETXProtocol(t *testing.T) {
 		largeDataPackage = largeDataPackage + "X"
 	}
 
-	assert.Equal(t, "\u0002"+largeDataPackage+"\u0003", string(buffer[:n]))
+	assert.Equal(t, "\u0002"+largeDataPackage+"\r\u0003", string(buffer[:n]))
 
 	tcpServer.Stop()
 }
 
-//----------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------
 // Test STX Protocol with Packages larger than the buffer and 2 messages in the stream
 // STX first string ETX data to be ignored STX second string ETX
 // expecting this to create two data-received events
-//----------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------------
 type genericRecordingHandler struct {
 	receiveQ                    chan []byte
 	didReceiveDisconnectMessage bool
@@ -551,9 +551,9 @@ func TestLis1A1Protocol(t *testing.T) {
 	tcpServer.Stop()
 }
 
-//------------------------------------------------------
+// ------------------------------------------------------
 // Connection declined by Handler
-//------------------------------------------------------
+// ------------------------------------------------------
 type testTCPServerDeclineConnection struct {
 	maxConnectionErrorDidOccur bool
 }

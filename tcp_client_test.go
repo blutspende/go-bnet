@@ -65,9 +65,9 @@ func runTCPMockServer(port int, tcpMockServerSendQ chan []byte, tcpMockServerRec
 }
 
 /*
-	Connect to TCP-Server, Read Data and transmit data
+Connect to TCP-Server, Read Data and transmit data
 
-	For parallel test-execution keep server-port unique throughout the suite
+For parallel test-execution keep server-port unique throughout the suite
 */
 func TestClientConnectReceiveAndSendRaw(t *testing.T) {
 
@@ -103,9 +103,11 @@ func TestClientConnectReceiveAndSendRaw(t *testing.T) {
 	tcpClient.Stop()
 }
 
-/****************************************************************
+/*
+***************************************************************
 Protocol wrapped STX Send and Receive
-****************************************************************/
+***************************************************************
+*/
 func TestClientProtocolSTXETX(t *testing.T) {
 	var tcpMockServerSendQ chan []byte = make(chan []byte, 1)
 	var tcpMockServerReceiveQ chan []byte = make(chan []byte, 1)
@@ -129,14 +131,16 @@ func TestClientProtocolSTXETX(t *testing.T) {
 	_, err = tcpClient.Send(testStringByte)
 	assert.Nil(t, err)
 	dataReceived := <-tcpMockServerReceiveQ
-	assert.Equal(t, "\u0002"+TESTSTRING+"\u0003", string(dataReceived))
+	assert.Equal(t, "\u0002"+TESTSTRING+"\r\u0003", string(dataReceived))
 
 	tcpClient.Stop()
 }
 
-/****************************************************************
+/*
+***************************************************************
 Test client remote address
-****************************************************************/
+***************************************************************
+*/
 func TestClientRemoteAddress(t *testing.T) {
 	var tcpMockServerSendQ chan []byte = make(chan []byte, 1)
 	var tcpMockServerReceiveQ chan []byte = make(chan []byte, 1)
@@ -152,9 +156,11 @@ func TestClientRemoteAddress(t *testing.T) {
 	assert.Equal(t, "127.0.0.1", addr)
 }
 
-/****************************************************************
+/*
+***************************************************************
 Test client with Run-Session to connect, handle async events
-****************************************************************/
+***************************************************************
+*/
 type ClientTestSession struct {
 	receiveBuffer            string
 	connectionEventOccured   bool
