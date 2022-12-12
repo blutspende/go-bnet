@@ -102,7 +102,7 @@ var Rules []utilities.Rule = []utilities.Rule{
 	{FromState: 10, Symbols: []byte{utilities.CR}, ToState: 11, Scan: false, ActionCode: utilities.CheckSum},
 	{FromState: 11, Symbols: []byte{utilities.LF}, ToState: 12, Scan: false, ActionCode: JustAck},
 	{FromState: 12, Symbols: []byte{utilities.STX}, ToState: 99, Scan: false},
-	{FromState: 12, Symbols: []byte{utilities.EOT}, ToState: utilities.Init, Scan: false, ActionCode: utilities.Finish},
+	{FromState: 12, Symbols: []byte{utilities.EOT}, ToState: utilities.Init, Scan: false, ActionCode: utilities.Finished},
 }
 
 type lis1A1 struct {
@@ -318,7 +318,7 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 					lastMessage = make([]byte, 0)
 					fsm.ResetBuffer()
 
-				case utilities.Finish:
+				case utilities.Finished:
 					// send fileData
 					proto.transferMessageToHandler(fileBuffer)
 
