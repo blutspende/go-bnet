@@ -10,9 +10,11 @@ import (
 	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol"
 )
 
-/* One instance of client can only connect one
-   session to a server, thus Instance = Session
-   implements both interfaces
+/*
+One instance of client can only connect one
+
+	session to a server, thus Instance = Session
+	implements both interfaces
 */
 type tcpClientConnectionAndSession struct {
 	hostname         string
@@ -56,7 +58,7 @@ func (s *tcpClientConnectionAndSession) Run(handler Handler) {
 	s.isStopped = false
 
 	s.Connect()
-	for !s.isStopped {
+	for !s.isStopped && s.IsAlive() {
 		s.ensureConnected()
 		data, err := s.Receive()
 		if err != nil {
