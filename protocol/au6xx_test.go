@@ -130,3 +130,69 @@ func TestMultipleMessageRequestResponseIncludingARetryOnSimulatedFail(t *testing
 func TestDataResultMessageWithANAK(t *testing.T) {
 	// TODO
 }
+
+/*
+An Request starts with
+
+	RB00 (where 00 is the instrument)
+	... request data
+	RE00 (ending)
+*/
+func TestAfterRBThereShouldBeNoSEfromHost(t *testing.T) {
+	/*
+		fmt.Println("--- start test")
+		host, instrument := net.Pipe()
+		buffer_1Byte := make([]byte, 1)
+
+		os.Setenv("PROTOLOG_ENABLE", "extended") // enable logging
+
+		fmt.Println("Lets go")
+		go func() {
+			fmt.Println("Sending RB")
+			_, err := instrument.Write([]byte{utilities.STX, 'R', 'B', '0', '3', utilities.LF}) // no bcc)
+			assert.Nil(t, err)
+
+			fmt.Println("Sending RB")
+			//++ expect ACK
+			_, err = instrument.Read(buffer_1Byte)
+
+			_, err = instrument.Write([]byte{utilities.STX, 'R', 'E', '0', '3', utilities.LF}) // no bcc)
+			assert.Nil(t, err)
+
+			//++ expect ACK
+			_, err = instrument.Read(buffer_1Byte)
+
+			// establish stx
+			buffer := make([]byte, 1024)
+			n, err := instrument.Read(buffer)
+			assert.Nil(t, err)
+			fmt.Println(" n = ", n, " buffer = ", buffer[:n])
+		}()
+
+		instance := Logger(AU6XXProtocol(DefaultAU6XXProtocolSettings().
+			SetStartByte(0x02).
+			SetEndByte(0x0A).
+			SetLineBreakByte(0x0A).SetAcknowledgementTimeout(500 * time.Millisecond)))
+
+		fmt.Println("Reading buffer")
+		buffer, err := instance.Receive(host)
+		assert.Nil(t, err)
+		assert.Equal(t, string(buffer), "RB03")
+
+		_, err = instrument.Write([]byte{utilities.ACK})
+
+		// Read "RB03"
+		n, err := host.Read(buffer)
+		assert.Nil(t, err)
+		assert.Equal(t, 5, n)
+		time.Sleep(time.Second)
+
+		ackBytes, err := instance.NewInstance().Receive(host)
+		assert.Nil(t, err)
+		assert.Equal(t, []byte{}, ackBytes)
+	*/
+}
+
+func TestServerRestartWhileInRequestMode(t *testing.T) {
+	// TODO
+}

@@ -139,8 +139,10 @@ func (p *au6xxProtocol) generateRules() []utilities.Rule {
 		{FromState: 10, Symbols: printableChars8BitWithoutE, ToState: 11, ActionCode: RequestStart, Scan: true},
 		{FromState: 11, Symbols: []byte{p.settings.endByte}, ToState: 12, ActionCode: LineReceived, Scan: false},
 		{FromState: 11, Symbols: utilities.PrintableChars8Bit, ToState: 11, Scan: true},
+
 		{FromState: 12, Symbols: []byte{utilities.ACK}, ToState: 13, Scan: false},
 		{FromState: 12, Symbols: []byte{utilities.NAK}, ToState: 13, ActionCode: RetransmitLastMessage, Scan: false},
+
 		{FromState: 13, Symbols: []byte{p.settings.startByte}, ToState: 1, Scan: false},
 		{FromState: 13, Symbols: []byte{utilities.NAK}, ToState: 13, ActionCode: RetransmitLastMessage, Scan: false},
 		{FromState: 13, Symbols: []byte{utilities.ACK}, ToState: 13, Scan: false},
@@ -297,13 +299,14 @@ func (p *au6xxProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 						fmt.Printf("can not send ACK in Finish. Should never happen\n")
 						fsm.Init()
 					}
-					time.Sleep(p.settings.acknowledgementTimeout)
+
+					/*time.Sleep(p.settings.acknowledgementTimeout)
 					_, err = conn.Write([]byte{utilities.STX, 'S', 'E', p.settings.endByte})
 					if err != nil {
 						fmt.Printf("can not send ACK in Finish. Should never happen\n")
 						fsm.Init()
 					}
-					fileBuffer = make([][]byte, 0)
+					fileBuffer = make([][]byte, 0) */
 					fsm.ResetBuffer()
 				case utilities.Finished:
 					// send fileData if not request
