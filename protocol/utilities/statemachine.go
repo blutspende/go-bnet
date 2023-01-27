@@ -63,11 +63,11 @@ func CreateFSM(data []Rule) FiniteStateMachine {
 // Helper function to shorten strings to 15 characters for log-printing
 func prettyprint(datain []byte) string {
 	fewbytes := datain
-	if len(datain) > 15 {
-		fewbytes = datain[:10]
+	if len(datain) > 60 {
+		fewbytes = datain[:55]
 	}
 	str := makeBytesReadable(fewbytes)
-	if len(datain) > 15 {
+	if len(datain) > 60 {
 		str = str + "..."
 	}
 	return str
