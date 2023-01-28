@@ -164,7 +164,9 @@ func (p *au6xxProtocol) generateRules() []utilities.Rule {
 		{FromState: 9, Symbols: utilities.PrintableChars8Bit, ToState: 0, ActionCode: utilities.Finished, Scan: false},
 		{FromState: 15, Symbols: []byte{p.settings.endByte}, ToState: 16, ActionCode: utilities.RequestFinished, Scan: false},
 		{FromState: 15, Symbols: utilities.PrintableChars8Bit, ToState: 15, Scan: true},
+
 		{FromState: 16, Symbols: []byte{utilities.ACK, utilities.NAK}, ToState: 0},
+		{FromState: 16, Symbols: []byte{p.settings.startByte}, ToState: 1, Scan: false},
 	}
 }
 
@@ -183,7 +185,8 @@ func (p *au6xxProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 		fileBuffer := make([][]byte, 0)
 
 		fsm := utilities.CreateFSM(p.generateRules())
-		for {
+		for p.receiveThreadIsRunning {
+
 			err := conn.SetReadDeadline(time.Now().Add(time.Minute * 25))
 			if err != nil {
 				fmt.Printf(`should not happen: %s`, err.Error())

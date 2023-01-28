@@ -196,3 +196,10 @@ func TestAfterRBThereShouldBeNoSEfromHost(t *testing.T) {
 func TestServerRestartWhileInRequestMode(t *testing.T) {
 	// TODO
 }
+
+func TestBugAfterREStartDataTransmission(t *testing.T) {
+	// Send RB03
+	// Send RE03
+	// Send <STX>D.....
+	// failed with this commit, state 16 did not lead to 1 (start receiving)
+}
