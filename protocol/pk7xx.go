@@ -19,7 +19,6 @@ type pk7xxProtocol struct {
 func PK7xxProtocol() Implementation {
 
 	numbers := []byte{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'}
-
 	normalCharacters := []byte{}
 	for i := 0x21; i < 0xF7; i++ { // Character specification according to manual
 		normalCharacters = append(normalCharacters, byte(i))
@@ -33,77 +32,65 @@ func PK7xxProtocol() Implementation {
 	fsm := []utilities.Rule{
 		// Always starting a Message with STX SBxx ETX
 		{FromState: 0, Symbols: []byte{utilities.STX}, ToState: 10, Scan: false},
+		// Message segment always ends with ETX + BCC (checksum, not validated)
+		{FromState: 5, Symbols: []byte{utilities.ETX}, ToState: 6, Scan: false},
+		{FromState: 6, Symbols: anySymbol, ToState: 0, Scan: false},
 
 		// Transmission Control
-		{FromState: 10, Symbols: []byte{'S'}, ToState: 11, Scan: true},
-		{FromState: 11, Symbols: []byte{'B'}, ToState: 200, Scan: true, ActionCode: "SB-Record"},
+		{FromState: 10, Symbols: []byte{'S'}, ToState: 11, Scan: false},
+		{FromState: 11, Symbols: []byte{'B'}, ToState: 100, Scan: false, ActionCode: "SB-Record"},
 
 		// Datablock start
 		{FromState: 10, Symbols: []byte{'D'}, ToState: 21, Scan: true},
-		{FromState: 21, Symbols: []byte{'B'}, ToState: 1000, Scan: true, ActionCode: "DB-Record"},
-
-		// Reagent information
-		{FromState: 10, Symbols: []byte{'Q'}, ToState: 31, Scan: true},
-		{FromState: 31, Symbols: []byte{'R'}, ToState: 200, Scan: true, ActionCode: "QR-Record"},
-
-		// Diluent information
-		{FromState: 10, Symbols: []byte{'Q'}, ToState: 21, Scan: true},
-		{FromState: 41, Symbols: []byte{'D'}, ToState: 200, Scan: true, ActionCode: "QD-Record"},
+		{FromState: 21, Symbols: []byte{'B'}, ToState: 200, Scan: true, ActionCode: "DB-Record"},
+		{FromState: 21, Symbols: []byte{'E'}, ToState: 200, Scan: true, ActionCode: "DE-Record"},
+		{FromState: 21, Symbols: []byte{' '}, ToState: 200, Scan: true, ActionCode: "D -Record"},
+		{FromState: 21, Symbols: []byte{'Q'}, ToState: 200, Scan: true, ActionCode: "DQ-Record"},
 
 		// Machine info
-		{FromState: 10, Symbols: []byte{'M'}, ToState: 21, Scan: true},
-		{FromState: 41, Symbols: []byte{' '}, ToState: 200, Scan: true, ActionCode: "M-Record"},
+		{FromState: 10, Symbols: []byte{'M'}, ToState: 31, Scan: true},
+		{FromState: 31, Symbols: []byte{' '}, ToState: 200, Scan: true, ActionCode: "M-Record"},
 
-		// Device number All blocks
-		{FromState: 200, Symbols: numbers, ToState: 201, Scan: true, ActionCode: "BCC"},
+		// Reagent information
+		{FromState: 10, Symbols: []byte{'Q'}, ToState: 41, Scan: true},
+		{FromState: 41, Symbols: []byte{'R'}, ToState: 200, Scan: true, ActionCode: "QR-Record"},
 
-		{FromState: 201, Symbols: []byte{utilities.ETX}, ToState: 202, Scan: false},
-		{FromState: 202, Symbols: anySymbol, ToState: 210, Scan: true},
+		// Diluent information
+		{FromState: 41, Symbols: []byte{'D'}, ToState: 200, Scan: true, ActionCode: "QD-Record"},
 
-		/*
-			// Device number for DB-Block
-			{FromState: 1000, Symbols: numbers, ToState: 1001, Scan: true},
-			{FromState: 1001, Symbols: numbers, ToState: 1010, Scan: true},
+		//Device number followed by end of message (ETX BCC)
+		//use for ending of SB DB DE
+		{FromState: 100, Symbols: anySymbol, ToState: 101, Scan: false},
+		{FromState: 101, Symbols: anySymbol, ToState: 5, Scan: false},
 
-
-			{FromState: 30, Symbols: numbers, ToState: 30, Scan: true},
-			{FromState: 30, Symbols: []byte{utilities.ETX}, ToState: 40, Scan: false, ActionCode: "StartMessage"},
-			{FromState: 40, Symbols: anySymbol, ToState: 50, Scan: true, ActionCode: "CheckSum"},
-
-			// Normal Characters
-			{FromState: 50, Symbols: []byte{utilities.STX}, ToState: 60, Scan: false},
-			{FromState: 60, Symbols: []byte{'D'}, ToState: 61, Scan: true},
-			{FromState: 61, Symbols: []byte{'E'}, ToState: 100, Scan: true},
-			{FromState: 60, Symbols: normalCharacters, ToState: 60, Scan: true},
-			{FromState: 60, Symbols: []byte{utilities.ETX}, ToState: 70, Scan: false, ActionCode: "Data"},
-			{FromState: 70, Symbols: anySymbol, ToState: 50, Scan: true},
-
-			// Leaving the show with DE ETX checksum
-			{FromState: 100, Symbols: []byte{utilities.ETX}, ToState: 101, Scan: false},
-			{FromState: 101, Symbols: anySymbol, ToState: 0, Scan: true}, */
+		//scan all bytes inside message until ETX BCC
+		//ignore device number field (2 bytes)
+		{FromState: 200, Symbols: numbers, ToState: 201, Scan: false},
+		{FromState: 201, Symbols: numbers, ToState: 202, Scan: false},
+		{FromState: 202, Symbols: []byte{utilities.ETX}, ToState: 6, Scan: true, ActionCode: "Record end"},
+		//read all bytes until ETX
+		{FromState: 202, Symbols: anySymbol, ToState: 202, Scan: true},
 	}
 
 	return &pk7xxProtocol{
-		fsm: fsm,
+		fsm:      fsm,
+		receiveQ: make(chan protocolMessage),
 	}
 }
 
 func (p *pk7xxProtocol) Interrupt() {}
 
 func (p *pk7xxProtocol) ensureReceiveThreadRunning(conn net.Conn) {
-
 	if p.receiveThreadIsRunning {
 		return
 	}
-
+	transmissionBytes := make([]byte, 0)
+	ignoreSegment := false
 	go func() {
 		p.receiveThreadIsRunning = true
 		p.state.State = 0
 
-		//lastMessage := make([]byte, 0)
 		tcpReceiveBuffer := make([]byte, 4096)
-		//fileBuffer := make([][]byte, 0)
-
 		fsm := utilities.CreateFSM(p.fsm)
 		for p.receiveThreadIsRunning {
 			n, err := conn.Read(tcpReceiveBuffer)
@@ -150,8 +137,24 @@ func (p *pk7xxProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 					return
 				}
 				switch action {
-				case "SB-Record":
-					fmt.Printf("Messagebuffer %s\n", messageBuffer)
+				case utilities.Ok:
+				case "D -Record", "DQ-Record", "M-Record", "QR-Record", "QD-Record":
+					ignoreSegment = false
+				case "SB-Record", "DB-Record":
+					ignoreSegment = true
+				case "DE-Record":
+					//remove DE from end of transmitted bytes
+					p.receiveQ <- protocolMessage{
+						Status: DATA,
+						Data:   transmissionBytes,
+					}
+					transmissionBytes = make([]byte, 0)
+					ignoreSegment = false
+				case "Record end":
+					if !ignoreSegment {
+						transmissionBytes = append(transmissionBytes, messageBuffer...)
+					}
+					fsm.ResetBuffer()
 				default:
 					protocolMsg := protocolMessage{
 						Status: ERROR,
