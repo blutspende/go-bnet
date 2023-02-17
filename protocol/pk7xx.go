@@ -33,7 +33,7 @@ func PK7xxProtocol() Implementation {
 		// Always starting a Message with STX SBxx ETX
 		{FromState: 0, Symbols: []byte{utilities.STX}, ToState: 10, Scan: false},
 		// Message segment always ends with ETX + BCC (checksum, not validated)
-		{FromState: 5, Symbols: []byte{utilities.ETX}, ToState: 6, Scan: false},
+		{FromState: 5, Symbols: []byte{utilities.ETX}, ToState: 6, Scan: false, ActionCode: "Record end"},
 		{FromState: 6, Symbols: anySymbol, ToState: 0, Scan: false},
 
 		// Transmission Control
@@ -42,8 +42,8 @@ func PK7xxProtocol() Implementation {
 
 		// Datablock start
 		{FromState: 10, Symbols: []byte{'D'}, ToState: 21, Scan: true},
-		{FromState: 21, Symbols: []byte{'B'}, ToState: 200, Scan: true, ActionCode: "DB-Record"},
-		{FromState: 21, Symbols: []byte{'E'}, ToState: 200, Scan: true, ActionCode: "DE-Record"},
+		{FromState: 21, Symbols: []byte{'B'}, ToState: 100, Scan: true, ActionCode: "DB-Record"},
+		{FromState: 21, Symbols: []byte{'E'}, ToState: 100, Scan: true, ActionCode: "DE-Record"},
 		{FromState: 21, Symbols: []byte{' '}, ToState: 200, Scan: true, ActionCode: "D -Record"},
 		{FromState: 21, Symbols: []byte{'Q'}, ToState: 200, Scan: true, ActionCode: "DQ-Record"},
 
@@ -67,7 +67,7 @@ func PK7xxProtocol() Implementation {
 		//ignore device number field (2 bytes)
 		{FromState: 200, Symbols: numbers, ToState: 201, Scan: false},
 		{FromState: 201, Symbols: numbers, ToState: 202, Scan: false},
-		{FromState: 202, Symbols: []byte{utilities.ETX}, ToState: 6, Scan: true, ActionCode: "Record end"},
+		{FromState: 202, Symbols: []byte{utilities.ETX}, ToState: 6, Scan: false, ActionCode: "Record end"},
 		//read all bytes until ETX
 		{FromState: 202, Symbols: anySymbol, ToState: 202, Scan: true},
 	}
@@ -84,7 +84,6 @@ func (p *pk7xxProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 	if p.receiveThreadIsRunning {
 		return
 	}
-	transmissionBytes := make([]byte, 0)
 	ignoreSegment := false
 	go func() {
 		p.receiveThreadIsRunning = true
@@ -140,19 +139,14 @@ func (p *pk7xxProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 				case utilities.Ok:
 				case "D -Record", "DQ-Record", "M-Record", "QR-Record", "QD-Record":
 					ignoreSegment = false
-				case "SB-Record", "DB-Record":
+				case "SB-Record", "DB-Record", "DE-Record":
 					ignoreSegment = true
-				case "DE-Record":
-					//remove DE from end of transmitted bytes
-					p.receiveQ <- protocolMessage{
-						Status: DATA,
-						Data:   transmissionBytes,
-					}
-					transmissionBytes = make([]byte, 0)
-					ignoreSegment = false
 				case "Record end":
 					if !ignoreSegment {
-						transmissionBytes = append(transmissionBytes, messageBuffer...)
+						p.receiveQ <- protocolMessage{
+							Status: DATA,
+							Data:   messageBuffer,
+						}
 					}
 					fsm.ResetBuffer()
 				default:

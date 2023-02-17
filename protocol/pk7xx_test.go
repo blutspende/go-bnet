@@ -20,12 +20,16 @@ func TestGLIMSDataTransmission(t *testing.T) {
 	}()
 	r1message, err := instance.Receive(host)
 	assert.Nil(t, err)
-	assert.Equal(t, "M aaaaaa7777777\u0003"+
-		"QR2101202212070001EE01011A-1  Diagast             00400002363105202302021B-1  Diagast             00400019853105202303041D-1  Diagast             00400004393108202304051Rh-KoDiagast             00400000223105202305171C-1  Diagast             00300002182802202306181c-1  Diagast             00300002672802202307191E-1  Diagast             00300003602802202308201e-1  Diagast             00300005503108202209211Kel-1Diagast             003000004328022023\u0003"+
-		"QD2101202212070001EE0101 Brom Diagast             0120000984300620220301 Brom Diagast             012000098630062022\u0003"+
-		"D 210120221207                 AA4A1A0E8F00010001  EE      - - + - + + + + -                            ABO2 O       CE-2 CcEe    D-2  RH+     K-2  KELL -  RhC2 CONTR- M0174116740 7550273135638 5930360461302 0000471125936 5880559461302 0000658451302 0000760401502 0000862511202 0000975135839 571\u0003",
-		string(r1message))
-
+	assert.Equal(t, "M aaaaaa7777777", string(r1message))
+	r2message, err := instance.Receive(host)
+	assert.Nil(t, err)
+	assert.Equal(t, "QR2101202212070001EE01011A-1  Diagast             00400002363105202302021B-1  Diagast             00400019853105202303041D-1  Diagast             00400004393108202304051Rh-KoDiagast             00400000223105202305171C-1  Diagast             00300002182802202306181c-1  Diagast             00300002672802202307191E-1  Diagast             00300003602802202308201e-1  Diagast             00300005503108202209211Kel-1Diagast             003000004328022023", string(r2message))
+	r3message, err := instance.Receive(host)
+	assert.Nil(t, err)
+	assert.Equal(t, "QD2101202212070001EE0101 Brom Diagast             0120000984300620220301 Brom Diagast             012000098630062022", string(r3message))
+	r4message, err := instance.Receive(host)
+	assert.Nil(t, err)
+	assert.Equal(t, "D 210120221207                 AA4A1A0E8F00010001  EE      - - + - + + + + -                            ABO2 O       CE-2 CcEe    D-2  RH+     K-2  KELL -  RhC2 CONTR- M0174116740 7550273135638 5930360461302 0000471125936 5880559461302 0000658451302 0000760401502 0000862511202 0000975135839 571", string(r4message))
 }
 
 // A test where 02 'S' and then trash tries to crash the connection, expecting the fsm to reset
