@@ -2,22 +2,31 @@ package protocol
 
 import (
 	"fmt"
+	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 	"io"
 	"net"
-
-	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 )
 
 type pk7xxProtocol struct {
-	//settings               *AU6XXProtocolSettings
 	receiveThreadIsRunning bool
 	receiveQ               chan protocolMessage
 	state                  processState
 	fsm                    []utilities.Rule
 }
 
-func PK7xxProtocol() Implementation {
+const (
+	ETXReceived     = "ETX"
+	SBRecordStarted = "SB"
+	MRecordStarted  = "M"
+	QDRecordStarted = "QD"
+	QRRecordStarted = "QR"
+	DRecordStarted  = "D"
+	DBRecordStarted = "DB"
+	DERecordStarted = "DE"
+	DQRecordStarted = "DQ"
+)
 
+func PK7xxProtocol() Implementation {
 	numbers := []byte{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'}
 	normalCharacters := []byte{}
 	for i := 0x21; i < 0xF7; i++ { // Character specification according to manual
@@ -33,30 +42,30 @@ func PK7xxProtocol() Implementation {
 		// Always starting a Message with STX SBxx ETX
 		{FromState: 0, Symbols: []byte{utilities.STX}, ToState: 10, Scan: false},
 		// Message segment always ends with ETX + BCC (checksum, not validated)
-		{FromState: 5, Symbols: []byte{utilities.ETX}, ToState: 6, Scan: false, ActionCode: "Record end"},
+		{FromState: 5, Symbols: []byte{utilities.ETX}, ToState: 6, Scan: false, ActionCode: ETXReceived},
 		{FromState: 6, Symbols: anySymbol, ToState: 0, Scan: false},
 
 		// Transmission Control
 		{FromState: 10, Symbols: []byte{'S'}, ToState: 11, Scan: false},
-		{FromState: 11, Symbols: []byte{'B'}, ToState: 100, Scan: false, ActionCode: "SB-Record"},
+		{FromState: 11, Symbols: []byte{'B'}, ToState: 100, Scan: false, ActionCode: SBRecordStarted},
 
 		// Datablock start
 		{FromState: 10, Symbols: []byte{'D'}, ToState: 21, Scan: true},
-		{FromState: 21, Symbols: []byte{'B'}, ToState: 100, Scan: true, ActionCode: "DB-Record"},
-		{FromState: 21, Symbols: []byte{'E'}, ToState: 100, Scan: true, ActionCode: "DE-Record"},
-		{FromState: 21, Symbols: []byte{' '}, ToState: 200, Scan: true, ActionCode: "D -Record"},
-		{FromState: 21, Symbols: []byte{'Q'}, ToState: 200, Scan: true, ActionCode: "DQ-Record"},
+		{FromState: 21, Symbols: []byte{'B'}, ToState: 200, Scan: true, ActionCode: DBRecordStarted},
+		{FromState: 21, Symbols: []byte{'E'}, ToState: 200, Scan: true, ActionCode: DERecordStarted},
+		{FromState: 21, Symbols: []byte{' '}, ToState: 200, Scan: true, ActionCode: DRecordStarted},
+		{FromState: 21, Symbols: []byte{'Q'}, ToState: 200, Scan: true, ActionCode: DQRecordStarted},
 
 		// Machine info
 		{FromState: 10, Symbols: []byte{'M'}, ToState: 31, Scan: true},
-		{FromState: 31, Symbols: []byte{' '}, ToState: 200, Scan: true, ActionCode: "M-Record"},
+		{FromState: 31, Symbols: []byte{' '}, ToState: 200, Scan: true, ActionCode: MRecordStarted},
 
 		// Reagent information
 		{FromState: 10, Symbols: []byte{'Q'}, ToState: 41, Scan: true},
-		{FromState: 41, Symbols: []byte{'R'}, ToState: 200, Scan: true, ActionCode: "QR-Record"},
+		{FromState: 41, Symbols: []byte{'R'}, ToState: 200, Scan: true, ActionCode: QRRecordStarted},
 
 		// Diluent information
-		{FromState: 41, Symbols: []byte{'D'}, ToState: 200, Scan: true, ActionCode: "QD-Record"},
+		{FromState: 41, Symbols: []byte{'D'}, ToState: 200, Scan: true, ActionCode: QDRecordStarted},
 
 		//Device number followed by end of message (ETX BCC)
 		//use for ending of SB DB DE
@@ -67,7 +76,7 @@ func PK7xxProtocol() Implementation {
 		//ignore device number field (2 bytes)
 		{FromState: 200, Symbols: numbers, ToState: 201, Scan: false},
 		{FromState: 201, Symbols: numbers, ToState: 202, Scan: false},
-		{FromState: 202, Symbols: []byte{utilities.ETX}, ToState: 6, Scan: false, ActionCode: "Record end"},
+		{FromState: 202, Symbols: []byte{utilities.ETX}, ToState: 6, Scan: true, ActionCode: ETXReceived},
 		//read all bytes until ETX
 		{FromState: 202, Symbols: anySymbol, ToState: 202, Scan: true},
 	}
@@ -84,7 +93,7 @@ func (p *pk7xxProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 	if p.receiveThreadIsRunning {
 		return
 	}
-	ignoreSegment := false
+	dataEndSegmentStarted := false
 	go func() {
 		p.receiveThreadIsRunning = true
 		p.state.State = 0
@@ -137,18 +146,18 @@ func (p *pk7xxProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 				}
 				switch action {
 				case utilities.Ok:
-				case "D -Record", "DQ-Record", "M-Record", "QR-Record", "QD-Record":
-					ignoreSegment = false
-				case "SB-Record", "DB-Record", "DE-Record":
-					ignoreSegment = true
-				case "Record end":
-					if !ignoreSegment {
+				case SBRecordStarted, MRecordStarted, QDRecordStarted, QRRecordStarted, DBRecordStarted, DRecordStarted, DQRecordStarted:
+					dataEndSegmentStarted = false
+				case DERecordStarted:
+					dataEndSegmentStarted = true
+				case ETXReceived:
+					if dataEndSegmentStarted {
 						p.receiveQ <- protocolMessage{
 							Status: DATA,
 							Data:   messageBuffer,
 						}
+						fsm.ResetBuffer()
 					}
-					fsm.ResetBuffer()
 				default:
 					protocolMsg := protocolMessage{
 						Status: ERROR,
