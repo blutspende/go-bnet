@@ -2,9 +2,10 @@ package protocol
 
 import (
 	"fmt"
-	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 	"io"
 	"net"
+
+	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
 )
 
 type pk7xxProtocol struct {
@@ -15,15 +16,16 @@ type pk7xxProtocol struct {
 }
 
 const (
-	ETXReceived     = "ETX"
-	SBRecordStarted = "SB"
-	MRecordStarted  = "M"
-	QDRecordStarted = "QD"
-	QRRecordStarted = "QR"
-	DRecordStarted  = "D"
-	DBRecordStarted = "DB"
-	DERecordStarted = "DE"
-	DQRecordStarted = "DQ"
+	ETBHeaderStarted = "ETB"
+	ETXReceived      = "ETX"
+	SBRecordStarted  = "SB"
+	MRecordStarted   = "M"
+	QDRecordStarted  = "QD"
+	QRRecordStarted  = "QR"
+	DRecordStarted   = "D"
+	DBRecordStarted  = "DB"
+	DERecordStarted  = "DE"
+	DQRecordStarted  = "DQ"
 )
 
 func PK7xxProtocol() Implementation {
@@ -77,6 +79,11 @@ func PK7xxProtocol() Implementation {
 		{FromState: 200, Symbols: numbers, ToState: 201, Scan: false},
 		{FromState: 201, Symbols: numbers, ToState: 202, Scan: false},
 		{FromState: 202, Symbols: []byte{utilities.ETX}, ToState: 6, Scan: true, ActionCode: ETXReceived},
+		// ETB
+		{FromState: 202, Symbols: []byte{utilities.ETB}, ToState: 203, Scan: false},
+		{FromState: 203, Symbols: []byte{utilities.STX}, ToState: 202, Scan: false, ActionCode: ETBHeaderStarted},
+		{FromState: 203, Symbols: anySymbol, ToState: 203, Scan: false},
+
 		//read all bytes until ETX
 		{FromState: 202, Symbols: anySymbol, ToState: 202, Scan: true},
 	}
@@ -133,8 +140,21 @@ func (p *pk7xxProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 				p.receiveThreadIsRunning = false
 				return
 			}
+			dataETBHeaderStarted := false
+			etbHeaderCounter := 0
 
 			for _, ascii := range tcpReceiveBuffer[:n] {
+				// After 1024 bytes a transmission is interrupted by ETB + Code + STX +
+				// obsolete header for 53 bytes + data classification number (2 bytes, 00-99 or EE for the last message block),
+				// those bytes are skipped, and parsing is continued from the 56th byte.
+				if dataETBHeaderStarted {
+					etbHeaderCounter++
+					if etbHeaderCounter != 56 {
+						continue
+					}
+					etbHeaderCounter = 0
+					dataETBHeaderStarted = false
+				}
 				messageBuffer, action, err := fsm.Push(ascii)
 				if err != nil {
 					p.receiveQ <- protocolMessage{
@@ -158,6 +178,8 @@ func (p *pk7xxProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 						}
 						fsm.ResetBuffer()
 					}
+				case ETBHeaderStarted:
+					dataETBHeaderStarted = true
 				default:
 					protocolMsg := protocolMessage{
 						Status: ERROR,
