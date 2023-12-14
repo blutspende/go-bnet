@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol"
+	"github.com/blutspende/go-bloodlab-net/protocol"
 	"github.com/stretchr/testify/assert"
 )
 

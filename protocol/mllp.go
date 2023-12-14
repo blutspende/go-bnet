@@ -20,7 +20,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
+	"github.com/blutspende/go-bloodlab-net/protocol/utilities"
 )
 
 type MLLPProtocolSettings struct {

@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	bnet "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net"
+	bnet "github.com/blutspende/go-bloodlab-net"
 )
 
 type testFtpHandler struct {

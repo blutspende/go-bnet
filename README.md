@@ -3,7 +3,7 @@
 A libarary to simplify communication with laboratory instruments.
 
 ###### Install
-`go get github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net`
+`go get github.com/blutspende/go-bloodlab-net`
 
 ###### Features
   - TCP/IP Server implementation
@@ -39,8 +39,8 @@ import (
 	"fmt"
 	"time"
 
-	bloodlabnet "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net"
-	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol"
+	bloodlabnet "github.com/blutspende/go-bloodlab-net"
+	"github.com/blutspende/go-bloodlab-net/protocol"
 )
 
 type MySessionHandler struct {

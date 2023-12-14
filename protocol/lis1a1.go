@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
+	"github.com/blutspende/go-bloodlab-net/protocol/utilities"
 )
 
 var (

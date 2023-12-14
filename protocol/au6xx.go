@@ -10,7 +10,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol/utilities"
+	"github.com/blutspende/go-bloodlab-net/protocol/utilities"
 )
 
 type AU6XXProtocolSettings struct {

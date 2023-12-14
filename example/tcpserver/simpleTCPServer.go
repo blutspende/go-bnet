@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	bnet "github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net"
-	"github.com/DRK-Blutspende-BaWueHe/go-bloodlab-net/protocol"
+	bnet "github.com/blutspende/go-bloodlab-net"
+	"github.com/blutspende/go-bloodlab-net/protocol"
 )
 
 type MySessionHandler struct {
