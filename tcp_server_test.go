@@ -137,7 +137,7 @@ func TestRawDataProtocolWithTimeoutFlushMs(t *testing.T) {
 // --------------------------------------------------------------------------------------------
 func TestSendingLargeAmount(t *testing.T) {
 
-	tcpServer := CreateNewTCPServerInstance(4003,
+	tcpServer := CreateNewTCPServerInstance(4009,
 		protocol.STXETX(protocol.DefaultSTXETXProtocolSettings()), NoLoadBalancer, 100, DefaultTCPServerSettings)
 
 	handler := &testSessionMock{

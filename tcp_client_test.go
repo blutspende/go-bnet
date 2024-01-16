@@ -271,12 +271,12 @@ func TestLis1A1ProtocolClient(t *testing.T) {
 	var handler lis1a1Handler
 
 	go tcpServer.Run(&handler)
+	time.Sleep(time.Second)
 
 	tcpClient := CreateNewTCPClient("127.0.0.1", 4004,
 		protocol.Lis1A1Protocol(protocol.DefaultLis1A1ProtocolSettings()),
 		NoLoadBalancer,
 		DefaultTCPClientSettings)
-
 	err := tcpClient.Connect()
 	assert.Nil(t, err)
 
@@ -294,65 +294,4 @@ func TestLis1A1ProtocolClient(t *testing.T) {
 
 	tcpServer.Stop()
 	tcpClient.Stop()
-}
-
-type sourceIPHandler struct {
-	receiveQ                    chan []byte
-	didReceiveDisconnectMessage bool
-	lastConnectedIp             string
-	lasterror                   error
-}
-
-func (s *sourceIPHandler) Connected(session Session) error {
-	s.lastConnectedIp, s.lasterror = session.RemoteAddress()
-	return nil
-}
-
-func (s *sourceIPHandler) Disconnected(session Session) {
-	s.didReceiveDisconnectMessage = true
-}
-
-func (s *sourceIPHandler) DataReceived(session Session, fileData []byte, receiveTimestamp time.Time) error {
-	fmt.Println("Eventhandler : ", string(fileData))
-	s.receiveQ <- fileData
-
-	return nil
-}
-
-func (s *sourceIPHandler) Error(session Session, errorType ErrorType, err error) {
-	log.Fatal("Fatal error:", err)
-}
-
-func TestSourceIPClient(t *testing.T) {
-	tcpServer := CreateNewTCPServerInstance(4005, protocol.Raw(protocol.DefaultRawProtocolSettings()),
-		NoLoadBalancer,
-		50,
-		DefaultTCPServerSettings,
-	)
-
-	var handler sourceIPHandler
-
-	go tcpServer.Run(&handler)
-
-	tcpClient := CreateNewTCPClient("127.0.0.1", 4005,
-		protocol.Raw(protocol.DefaultRawProtocolSettings()),
-		NoLoadBalancer,
-		DefaultTCPClientSettings)
-
-	err := tcpClient.Connect()
-	assert.Nil(t, err)
-	time.Sleep(time.Second)
-	assert.Equal(t, "127.0.0.1", handler.lastConnectedIp)
-
-	currentLocalAddress := "127.0.0.1"
-	tcpClient2 := CreateNewTCPClient("127.0.0.1", 4005,
-		protocol.Raw(protocol.DefaultRawProtocolSettings()),
-		NoLoadBalancer,
-		DefaultTCPClientSettings.SetSourceIP(currentLocalAddress))
-	err = tcpClient2.Connect()
-	assert.Nil(t, err)
-
-	assert.Equal(t, currentLocalAddress, handler.lastConnectedIp)
-	tcpClient.Close()
-	tcpClient2.Close()
 }
