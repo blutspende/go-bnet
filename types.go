@@ -51,11 +51,6 @@ var DefaultTCPServerSettings = TCPServerConfiguration{
 	SessionInitationTimeout: time.Second * 0, // Waiting forever by default
 }
 
-var DefaultFTPClientTimings = TCPServerConfiguration{
-	Timeout:      time.Second * 5,
-	PollInterval: time.Second * 60,
-}
-
 type ConnectionType int
 
 const (
