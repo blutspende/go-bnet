@@ -146,8 +146,7 @@ func TestSendingLargeAmount(t *testing.T) {
 	}
 	go tcpServer.Run(handler)
 	tcpServer.WaitReady()
-
-	clientConn, err := net.Dial("tcp", "127.0.0.1:4003")
+	clientConn, err := net.Dial("tcp", "127.0.0.1:4009")
 	if err != nil {
 		log.Fatalf("Failed to dial (this is not an error, rather a problem of the unit test itself) : %s", err)
 	}
