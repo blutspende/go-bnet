@@ -192,13 +192,6 @@ func (p *pk7xxProtocol) ensureReceiveThreadRunning(conn net.Conn) {
 					return
 				}
 			}
-			if n < len(tcpReceiveBuffer) {
-				p.receiveQ <- protocolMessage{
-					Status: ERROR,
-					Data:   []byte("Message ended abruptly"),
-				}
-				p.receiveThreadIsRunning = false
-			}
 		}
 	}()
 }
