@@ -8,7 +8,6 @@ import (
 	"log"
 	"math/rand"
 	"net"
-	"reflect"
 	"sync"
 	"time"
 
@@ -155,8 +154,6 @@ func (instance *tcpServerInstance) Run(handler Handler) {
 			log.Println("max connection reached, forcing disconnect")
 			continue
 		}
-
-		reflect.New(reflect.TypeOf(instance.LowLevelProtocol))
 
 		session, err := createTcpServerSession(connection, handler, instance.LowLevelProtocol.NewInstance(), instance.timingConfig)
 		if err != nil {
