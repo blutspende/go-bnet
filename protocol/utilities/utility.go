@@ -34,3 +34,12 @@ func makeBytesReadable(in []byte) string {
 	}
 	return ret
 }
+
+func Contains[T comparable](item T, items []T) bool {
+	for i := range items {
+		if item == items[i] {
+			return true
+		}
+	}
+	return false
+}

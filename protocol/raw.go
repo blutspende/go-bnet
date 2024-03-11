@@ -2,10 +2,11 @@ package protocol
 
 import (
 	"io"
-	"log"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 type RawProtocolSettings struct {
@@ -61,6 +62,7 @@ func (proto *rawprotocol) Receive(conn net.Conn) ([]byte, error) {
 
 	millisceondsSinceLastRead := 0
 
+	remoteAddress := conn.RemoteAddr().String()
 	for {
 
 		// flush timeout for protocol RAW.
@@ -72,7 +74,7 @@ func (proto *rawprotocol) Receive(conn net.Conn) ([]byte, error) {
 
 		if proto.settings.readTimeout_ms > 0 {
 			if err := conn.SetReadDeadline(time.Now().Add(time.Millisecond * time.Duration(proto.settings.readTimeout_ms))); err != nil {
-				log.Println("Read timeout")
+				log.Warn().Str("remoteAddress", remoteAddress).Msg("Read timeout")
 				return []byte{}, err
 			}
 		}

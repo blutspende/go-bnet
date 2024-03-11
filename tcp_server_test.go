@@ -2,7 +2,6 @@ package bloodlabnet
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"sync"
 	"testing"
@@ -13,6 +12,8 @@ import (
 	"net"
 
 	"github.com/blutspende/go-bloodlab-net/protocol"
+
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -85,7 +86,7 @@ func TestRawDataProtocolWithTimeoutFlushMs(t *testing.T) {
 	// connect and expect connection handler to signal
 	clientConn, err := net.Dial("tcp", "127.0.0.1:4001")
 	if err != nil {
-		log.Fatalf("Failed to dial (this is not an error, rather a problem of the unit test itself) : %s", err)
+		log.Fatal().Err(err).Msg("Failed to dial (this is not an error, rather a problem of the unit test itself")
 		t.Fail()
 		os.Exit(1)
 	}
@@ -148,7 +149,7 @@ func TestSendingLargeAmount(t *testing.T) {
 	tcpServer.WaitReady()
 	clientConn, err := net.Dial("tcp", "127.0.0.1:4009")
 	if err != nil {
-		log.Fatalf("Failed to dial (this is not an error, rather a problem of the unit test itself) : %s", err)
+		log.Fatal().Err(err).Msg("Failed to dial (this is not an error, rather a problem of the unit test itself)")
 	}
 
 	dataIsSendSignal := make(chan bool)
@@ -247,6 +248,44 @@ func TestTCPServerIdentifyRemoteAddress(t *testing.T) {
 	time.Sleep(time.Second * 1) // sessions start async, therefor a short waitign is required
 
 	assert.Equal(t, "127.0.0.1", handlerTcp.lastConnectedIp)
+}
+
+// --------------------------------------------------------------------------------------------
+// When reaching the connection limit, the server should decline further connections
+// --------------------------------------------------------------------------------------------
+func TestTCPServerConnectionInitiationTimeout(t *testing.T) {
+	tcpServer := CreateNewTCPServerInstance(4002,
+		protocol.Raw(),
+		NoLoadBalancer,
+		2,
+		TCPServerConfiguration{
+			Timeout:                  time.Second * 3,
+			Deadline:                 time.Millisecond * 200,
+			FlushBufferTimoutMs:      500,
+			PollInterval:             time.Second * 60,
+			SessionAfterFirstByte:    true,            // Sessions are initiated after reading the first bytes (avoids disconnects)
+			SessionInitiationTimeout: time.Second * 5, // Waiting 30 sec by default
+		})
+
+	handlerTcp := &testSessionMock{
+		receiveQ:          make(chan []byte, 500),
+		signalReady:       make(chan bool, 100), // buffered so that we can ignore this signal without blocking process
+		occuredErrorTypes: make([]ErrorType, 0),
+	}
+
+	go tcpServer.Run(handlerTcp)
+	defer tcpServer.Stop()
+	time.Sleep(time.Second)
+	go func() {
+		conn1, err1 := net.Dial("tcp", "127.0.0.1:4002")
+		assert.Nil(t, err1)
+		assert.NotNil(t, conn1)
+		//resolving ip address in test environment is very slow, around 10 sec, which delays the beginning of the session
+		time.Sleep(20 * time.Second)
+		conn1.Write([]byte("connection should be already closed and this should never be received"))
+	}()
+	time.Sleep(25 * time.Second)
+	assert.Equal(t, 0, len(handlerTcp.receiveQ))
 }
 
 // --------------------------------------------------------------------------------------------
