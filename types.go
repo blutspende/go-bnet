@@ -30,12 +30,13 @@ var DefaultTCPClientSettings = TCPClientConfiguration{
 }
 
 type TCPServerConfiguration struct {
-	Timeout                 time.Duration
-	Deadline                time.Duration
-	FlushBufferTimoutMs     int
-	PollInterval            time.Duration
-	SessionAfterFirstByte   bool
-	SessionInitationTimeout time.Duration
+	Timeout                  time.Duration
+	Deadline                 time.Duration
+	FlushBufferTimoutMs      int
+	PollInterval             time.Duration
+	SessionAfterFirstByte    bool
+	SessionInitiationTimeout time.Duration
+	BlackListedIPAddresses   []string
 }
 
 type SecureConnectionOptions struct {
@@ -43,12 +44,12 @@ type SecureConnectionOptions struct {
 }
 
 var DefaultTCPServerSettings = TCPServerConfiguration{
-	Timeout:                 time.Second * 3,
-	Deadline:                time.Millisecond * 200,
-	FlushBufferTimoutMs:     500,
-	PollInterval:            time.Second * 60,
-	SessionAfterFirstByte:   true,            // Sessions are initiated after reading the first bytes (avoids disconnects)
-	SessionInitationTimeout: time.Second * 0, // Waiting forever by default
+	Timeout:                  time.Second * 3,
+	Deadline:                 time.Millisecond * 200,
+	FlushBufferTimoutMs:      500,
+	PollInterval:             time.Second * 60,
+	SessionAfterFirstByte:    true,             // Sessions are initiated after reading the first bytes (avoids disconnects)
+	SessionInitiationTimeout: time.Second * 30, // Waiting 30 sec by default
 }
 
 type ConnectionType int

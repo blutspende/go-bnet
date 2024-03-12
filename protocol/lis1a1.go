@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"regexp"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/blutspende/go-bloodlab-net/protocol/utilities"
+	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -443,7 +443,7 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 				time.Sleep(time.Second)
 				return proto.send(conn, data, recursionDepth+1)
 			default:
-				log.Printf("Warning: Recieved unexpected bytes in transmission (ignoring them) : %c ascii: %d\n", recievingMsg[0], recievingMsg[0])
+				log.Warn().Msgf("Received unexpected bytes in transmission (ignoring them) : %c ascii: %d\n", recievingMsg[0], recievingMsg[0])
 				continue // ignore all characters until ACK / 8.2.5
 			}
 		}
