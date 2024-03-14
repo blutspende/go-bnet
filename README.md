@@ -102,7 +102,20 @@ tcpServer := bloodlabnet.CreateNewTCPServerInstance(config.TCPListenerPort,
 ```
 ### Lis1A1 Protocol (TCP/Client + TCP/Server)
 Lis1A1 is a low level protocol for submitting data to laboratory instruments, typically via serial line.
+Settings for Lis1A1 low level protocol (multiple settings can be chained):
+```
+// enables/disables verifying the checksum of received messages
+EnableStrictChecksum() | DisableStrictChecksum() 
 
+// enables/disables adding the frame number to the start of the sent message frame
+EnableFrameNumber() | DisableFrameNumber()
+
+// enables/disables verifying the frame number of received messages
+EnableStrictFrameOrder() | DisableStrictFrameOrder()
+
+// enables/disables sending <CR><ETX> as frame end, by default frame end is <ETX>
+EnableAppendCarriageReturnToFrameEnd() | DisableAppendCarriageReturnToFrameEnd()
+```
 ### au6xx Protocol (TCP/Client + TCP/Server)
 The au6xx is the low-level protocol required for connecting to Beckman&Coulter AU6xx systems.
 ```
@@ -115,7 +128,7 @@ The au6xx is the low-level protocol required for connecting to Beckman&Coulter A
 Portscanners or Loadbalancers do connect just to disconnect a second later. By default the session initiation
 happens not on connect, rather when the first byte is sent. 
 
-Notice that certain instruments require the connection to remain opened, even if there is no data. 
+Notice that certain instruments require the connection to remain opened, even if there is no data.
 
 #### Disable the connection-timeout
 ``` golang
@@ -127,6 +140,14 @@ config.SessionAfterFirstByte = false // Default: true
 ``` golang
 config := DefaultTCPServerSettings
 config.SessionInitationTimeout = time.Second * 3  // Default: 0
+```
+
+#### Configure blacklist
+``` golang
+tcpServerSettings := bnet.DefaultTCPServerSettings
+	if len(config.BlackListedTCPClientIPAddresses) > 0 {
+		tcpServerSettings.BlackListedIPAddresses = strings.Split(config.BlackListedTCPClientIPAddresses, ",")
+	}
 ```
 
 ## Add low-level Logging : Protcol-Logger 
