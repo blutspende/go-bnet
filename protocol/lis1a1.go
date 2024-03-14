@@ -472,10 +472,6 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 				fmt.Printf("bnet.Send Transmit frame '%s'\n", string(frame))
 			}
 
-			if os.Getenv("BNETDEBUG") == "true" {
-				fmt.Printf("bnet.Send Sending frame\n")
-			}
-
 			// If frame-numbers are used, then here ;)
 			frameStr := ""
 			if proto.settings.expectFrameNumbers {
