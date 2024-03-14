@@ -584,7 +584,7 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 				bytesTransferred += len(frame)
 				bytesTransferred += len(checksum)
 				bytesTransferred += 3 // cr, lf stx and endByte
-				frameNumber = incrementFrameNumberModulo7(frameNumber)
+				frameNumber = incrementFrameNumberModulo8(frameNumber)
 				continue // was successfully do next
 			case utilities.NAK:
 				continue // Last was not successfully do next
@@ -613,8 +613,8 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 	}
 }
 
-func incrementFrameNumberModulo7(frameNumber int) int {
-	return (frameNumber + 1) % 7
+func incrementFrameNumberModulo8(frameNumber int) int {
+	return (frameNumber + 1) % 8
 }
 
 func (proto *lis1A1) receiveSendAnswer(conn net.Conn) (byte, error) {

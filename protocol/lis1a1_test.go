@@ -58,3 +58,22 @@ func TestSendData(t *testing.T) {
 
 	assert.Nil(t, err)
 }
+
+func TestFrameNumber(t *testing.T) {
+	assert.Equal(t, 1, incrementFrameNumberModulo8(0))
+	assert.Equal(t, 2, incrementFrameNumberModulo8(1))
+	assert.Equal(t, 3, incrementFrameNumberModulo8(2))
+	assert.Equal(t, 4, incrementFrameNumberModulo8(3))
+	assert.Equal(t, 5, incrementFrameNumberModulo8(4))
+	assert.Equal(t, 6, incrementFrameNumberModulo8(5))
+	assert.Equal(t, 7, incrementFrameNumberModulo8(6))
+	assert.Equal(t, 0, incrementFrameNumberModulo8(7))
+	assert.Equal(t, 1, incrementFrameNumberModulo8(8))
+	assert.Equal(t, 2, incrementFrameNumberModulo8(9))
+	assert.Equal(t, 3, incrementFrameNumberModulo8(10))
+	assert.Equal(t, 4, incrementFrameNumberModulo8(11))
+	assert.Equal(t, 5, incrementFrameNumberModulo8(12))
+	assert.Equal(t, 6, incrementFrameNumberModulo8(13))
+	assert.Equal(t, 7, incrementFrameNumberModulo8(14))
+	assert.Equal(t, 0, incrementFrameNumberModulo8(15))
+}
