@@ -166,7 +166,7 @@ func (instance *tcpServerInstance) Run(handler Handler) {
 		if instance.config.SessionAfterFirstByte {
 			if err := bufferedConn.FirstByteOrError(instance.config.SessionInitiationTimeout); err != nil {
 				connection.Close()
-				log.Debug().Str("ip", remoteIPAddress).Err(err).Msg("tcp server session initiation timeout reached")
+				log.Trace().Str("ip", remoteIPAddress).Err(err).Msg("tcp server session initiation timeout reached")
 				continue // no error, a connection is regarded as "never established"
 			}
 		}
