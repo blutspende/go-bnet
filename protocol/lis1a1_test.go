@@ -59,6 +59,50 @@ func TestSendData(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestSendDataWithCarriageReturnAppendEnabled(t *testing.T) {
+	message := [][]byte{
+		[]byte("P|1|12202437932|||^||||||||"),
+		[]byte("O|1|12202437932||^^^HSV-M||20240312133412|||||||||||||||||||Q"),
+		[]byte("O|2|12202437932||^^^HSV-G||20240312133412|||||||||||||||||||Q"),
+		[]byte("L|1|N"),
+	}
+	var mc mockConnection
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.ENQ}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "tx", bytes: []byte{utilities.ACK}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.STX}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: append([]byte("1"), message[0]...)})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.CR, utilities.ETX}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{57, 70}}) // checksum
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{13, 10}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "tx", bytes: []byte{utilities.ACK}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.STX}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: append([]byte("2"), message[1]...)})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.CR, utilities.ETX}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{65, 51}}) // checksum
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{13, 10}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "tx", bytes: []byte{utilities.ACK}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.STX}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: append([]byte("3"), message[2]...)})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.CR, utilities.ETX}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{57, 70}}) // checksum
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{13, 10}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "tx", bytes: []byte{utilities.ACK}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.STX}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: append([]byte("4"), message[3]...)})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.CR, utilities.ETX}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{48, 55}}) // checksum
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{13, 10}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "tx", bytes: []byte{utilities.ACK}})
+	mc.scriptedProtocol = append(mc.scriptedProtocol, scriptedProtocol{receiveOrSend: "rx", bytes: []byte{utilities.EOT}})
+
+	mc.currentRecord = 0
+
+	instance := Logger(Lis1A1Protocol(DefaultLis1A1ProtocolSettings().EnableAppendCarriageReturnToFrameEnd()))
+	_, err := instance.Send(&mc, message)
+
+	assert.Nil(t, err)
+}
+
 func TestFrameNumber(t *testing.T) {
 	assert.Equal(t, 1, incrementFrameNumberModulo8(0))
 	assert.Equal(t, 2, incrementFrameNumberModulo8(1))
@@ -76,4 +120,10 @@ func TestFrameNumber(t *testing.T) {
 	assert.Equal(t, 6, incrementFrameNumberModulo8(13))
 	assert.Equal(t, 7, incrementFrameNumberModulo8(14))
 	assert.Equal(t, 0, incrementFrameNumberModulo8(15))
+}
+
+func TestCheckSum(t *testing.T) {
+	//1H|\^&|||LIAISONXL|||||LABEDV||P|1|<CR><ETX>97<CR><LF>
+	result := computeChecksum([]byte("1"), []byte("H|\\^&|||LIAISONXL|||||LABEDV||P|1|"), []byte{utilities.CR, utilities.ETX})
+	assert.Equal(t, "97", string(result))
 }
