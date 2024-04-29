@@ -115,6 +115,9 @@ EnableStrictFrameOrder() | DisableStrictFrameOrder()
 
 // enables/disables sending <CR><ETX> as frame end, by default frame end is <ETX>
 EnableAppendCarriageReturnToFrameEnd() | DisableAppendCarriageReturnToFrameEnd()
+
+// sets line ending, by default line end is <CR>
+SetLineEnding(lineEnding []byte)
 ```
 ### au6xx Protocol (TCP/Client + TCP/Server)
 The au6xx is the low-level protocol required for connecting to Beckman&Coulter AU6xx systems.
