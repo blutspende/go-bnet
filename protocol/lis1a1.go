@@ -26,6 +26,7 @@ type Lis1A1ProtocolSettings struct {
 	appendCarriageReturnToFrameEnd bool
 	sendTimeoutDuration            time.Duration
 	strictFrameOrder               bool
+	lineEnding                     []byte
 }
 
 func (s Lis1A1ProtocolSettings) EnableStrictChecksum() *Lis1A1ProtocolSettings {
@@ -68,6 +69,11 @@ func (s Lis1A1ProtocolSettings) DisableAppendCarriageReturnToFrameEnd() *Lis1A1P
 }
 func (s Lis1A1ProtocolSettings) SetSendTimeOutDuration(timeout time.Duration) *Lis1A1ProtocolSettings {
 	s.sendTimeoutDuration = timeout
+	return &s
+}
+
+func (s Lis1A1ProtocolSettings) SetLineEnding(lineEnding []byte) *Lis1A1ProtocolSettings {
+	s.lineEnding = lineEnding
 	return &s
 }
 
@@ -135,6 +141,7 @@ func DefaultLis1A1ProtocolSettings() *Lis1A1ProtocolSettings {
 	settings.strictChecksumValidation = true
 	settings.sendTimeoutDuration = 30
 	settings.strictFrameOrder = false
+	settings.lineEnding = []byte{utilities.CR}
 	return &settings
 }
 
@@ -501,7 +508,7 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 				return -1, err
 			}
 
-			_, err = conn.Write([]byte{utilities.CR, utilities.LF})
+			_, err = conn.Write(proto.settings.lineEnding)
 			if err != nil {
 				return -1, err
 			}
