@@ -241,7 +241,7 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 			n, err := conn.Read(tcpReceiveBuffer)
 			proto.asyncReadActive.Done()
 			if os.Getenv("BNETDEBUG") == "true" {
-				fmt.Printf("bnet.lisa1.Recieve Received %v (%d bytes)\n", tcpReceiveBuffer[:n], n)
+				fmt.Printf("bnet.lisa1.Receive received %s (%d bytes) (raw: % X)\n", string(tcpReceiveBuffer[:n]), n, tcpReceiveBuffer[:n])
 			}
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
@@ -439,7 +439,7 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 		recievingMsg := make([]byte, 1)
 		n, err := conn.Read(recievingMsg)
 		if os.Getenv("BNETDEBUG") == "true" {
-			fmt.Printf("bnet.Send Received %v (%d bytes)\n", recievingMsg, n)
+			fmt.Printf("bnet.Send Received %s (%d bytes) (raw: % X)\n", string(recievingMsg), n, recievingMsg)
 		}
 
 		if err != nil {
@@ -476,7 +476,7 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 		for _, frame := range data {
 
 			if os.Getenv("BNETDEBUG") == "true" {
-				fmt.Printf("bnet.Send Transmit frame '%s'\n", string(frame))
+				fmt.Printf("bnet.Send Transmit frame '%s' (raw: % X)\n", string(frame), frame)
 			}
 
 			// If frame-numbers are used, then here ;)
@@ -534,7 +534,7 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 				return bytesTransferred, nil // Cancel after that one
 			default:
 				if os.Getenv("BNETDEBUG") == "true" {
-					fmt.Printf("bnet.Send Exit due to invalid Message: '%v' \n", receivedMsg)
+					fmt.Printf("bnet.Send Exit due to invalid Message: '%s' (raw: % X)\n", string(receivedMsg), receivedMsg)
 				}
 
 				return 0, ReceivedMessageIsInvalid
@@ -565,7 +565,7 @@ func (proto *lis1A1) receiveSendAnswer(conn net.Conn) (byte, error) {
 	receivingMsg := make([]byte, 1)
 	n, err := conn.Read(receivingMsg)
 	if os.Getenv("BNETDEBUG") == "true" {
-		fmt.Printf("bnet.Send recieveSendAnswer: read %d bytes : %s\n", n, receivingMsg[:n])
+		fmt.Printf("bnet.Send receiveSendAnswer: read %d bytes : %s (raw: % X)\n", n, receivingMsg[:n], receivingMsg[:n])
 	}
 
 	if err != nil {
