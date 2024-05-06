@@ -141,7 +141,7 @@ func DefaultLis1A1ProtocolSettings() *Lis1A1ProtocolSettings {
 	settings.strictChecksumValidation = true
 	settings.sendTimeoutDuration = 30
 	settings.strictFrameOrder = false
-	settings.lineEnding = []byte{utilities.CR}
+	settings.lineEnding = []byte{utilities.CR, utilities.LF}
 	return &settings
 }
 
