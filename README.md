@@ -116,7 +116,7 @@ EnableStrictFrameOrder() | DisableStrictFrameOrder()
 // enables/disables sending <CR><ETX> as frame end, by default frame end is <ETX>
 EnableAppendCarriageReturnToFrameEnd() | DisableAppendCarriageReturnToFrameEnd()
 
-// sets line ending, by default line end is <CR>
+// sets line ending, by default line end is <CR><LF>
 SetLineEnding(lineEnding []byte)
 ```
 ### au6xx Protocol (TCP/Client + TCP/Server)
