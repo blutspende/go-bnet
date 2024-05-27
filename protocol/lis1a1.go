@@ -411,6 +411,53 @@ func (proto *lis1A1) Interrupt() {
 	// not implemented (not required neither)
 }
 
+func (proto *lis1A1) sendFrameAndReceiveAnswer(frame []byte, frameNumber int, conn net.Conn) (byte, error) {
+	if os.Getenv("BNETDEBUG") == "true" {
+		fmt.Printf("bnet.Send Transmit frame '%s' (raw: % X)\n", string(frame), frame)
+	}
+
+	// If frame-numbers are used, then here ;)
+	frameStr := ""
+	if proto.settings.expectFrameNumbers {
+		frameStr = fmt.Sprintf("%d", frameNumber)
+	}
+	frameEnd := []byte{utilities.ETX}
+	if proto.settings.appendCarriageReturnToFrameEnd {
+		frameEnd = append([]byte{utilities.CR}, frameEnd...)
+	}
+	checksum := computeChecksum([]byte(frameStr), frame, frameEnd) //  frameNumber is an empty [] of bytes because it's already set to
+	_, err := conn.Write([]byte{utilities.STX})
+	if err != nil {
+		return 0, err
+	}
+
+	_, err = conn.Write(append([]byte(frameStr), frame...))
+	if err != nil {
+		return 0, err
+	}
+
+	_, err = conn.Write(frameEnd)
+	if err != nil {
+		return 0, err
+	}
+	_, err = conn.Write(checksum)
+	if err != nil {
+		return 0, err
+	}
+
+	_, err = conn.Write(proto.settings.lineEnding)
+	if err != nil {
+		return 0, err
+	}
+
+	receivedMsg, err := proto.receiveSendAnswer(conn)
+	if err != nil {
+		return 0, err
+	}
+
+	return receivedMsg, nil
+}
+
 // https://wiki.bloodlab.org/lib/exe/fetch.php?media=listnode:lis1-a.pdf
 func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int, error) {
 
@@ -454,7 +501,8 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 			case utilities.ACK: // 8.2.5
 				//  continue operation
 			case utilities.NAK: // 8.2.6
-				return -1, fmt.Errorf("instrument(lis1a1) did not accept any data")
+				time.Sleep(time.Second * 10)
+				return proto.send(conn, data, recursionDepth+1)
 			case utilities.ENQ: // 8.2.7.1, 2
 				time.Sleep(time.Second)
 				return proto.send(conn, data, recursionDepth+1)
@@ -474,50 +522,26 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 		bytesTransferred := 0
 		var checksum []byte
 		for _, frame := range data {
-
-			if os.Getenv("BNETDEBUG") == "true" {
-				fmt.Printf("bnet.Send Transmit frame '%s' (raw: % X)\n", string(frame), frame)
-			}
-
-			// If frame-numbers are used, then here ;)
-			frameStr := ""
-			if proto.settings.expectFrameNumbers {
-				frameStr = fmt.Sprintf("%d", frameNumber)
-			}
-			frameEnd := []byte{utilities.ETX}
-			if proto.settings.appendCarriageReturnToFrameEnd {
-				frameEnd = append([]byte{utilities.CR}, frameEnd...)
-			}
-			checksum = computeChecksum([]byte(frameStr), frame, frameEnd) //  frameNumber is an empty [] of bytes because it's already set to
-			_, err = conn.Write([]byte{utilities.STX})
-			if err != nil {
-				return -1, err
-			}
-
-			_, err = conn.Write(append([]byte(frameStr), frame...))
-			if err != nil {
-				return -1, err
-			}
-
-			_, err = conn.Write(frameEnd)
-			if err != nil {
-				return -1, err
-			}
-			_, err = conn.Write(checksum)
-			if err != nil {
-				return -1, err
-			}
-
-			_, err = conn.Write(proto.settings.lineEnding)
-			if err != nil {
-				return -1, err
-			}
-
-			receivedMsg, err := proto.receiveSendAnswer(conn)
+			receivedMsg, err := proto.sendFrameAndReceiveAnswer(frame, frameNumber, conn)
 			if err != nil {
 				return 0, err
 			}
 
+			if receivedMsg == utilities.NAK {
+				for i := 0; i < 6; i++ {
+					time.Sleep(time.Second)
+					receivedMsg, err = proto.sendFrameAndReceiveAnswer(frame, frameNumber, conn)
+					if err != nil {
+						return 0, err
+					}
+					if receivedMsg != utilities.NAK {
+						break
+					}
+				}
+				if receivedMsg == utilities.NAK {
+					return 0, fmt.Errorf("frame was not acknowledged by instrument after 6 retries (frameNumber: %d, frame: %s)", frameNumber, frame)
+				}
+			}
 			switch receivedMsg {
 			case utilities.ACK:
 				bytesTransferred += len(frame)
@@ -525,8 +549,6 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 				bytesTransferred += 3 // cr, lf stx and endByte
 				frameNumber = incrementFrameNumberModulo8(frameNumber)
 				continue // was successfully do next
-			case utilities.NAK:
-				continue // Last was not successfully do next
 			case utilities.EOT:
 				bytesTransferred += len(frame)
 				bytesTransferred += len(checksum)
