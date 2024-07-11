@@ -7,7 +7,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/blutspende/go-bloodlab-net/protocol"
+	"github.com/blutspende/go-bnet/protocol"
 )
 
 /*

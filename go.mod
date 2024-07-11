@@ -1,4 +1,4 @@
-module github.com/blutspende/go-bloodlab-net
+module github.com/blutspende/go-bnet
 
 go 1.18
 

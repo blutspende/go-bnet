@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blutspende/go-bloodlab-net/protocol/utilities"
+	"github.com/blutspende/go-bnet/protocol/utilities"
 
 	"net"
 
-	"github.com/blutspende/go-bloodlab-net/protocol"
+	"github.com/blutspende/go-bnet/protocol"
 
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"

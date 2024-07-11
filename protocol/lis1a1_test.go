@@ -2,7 +2,7 @@ package protocol
 
 import (
 	"fmt"
-	"github.com/blutspende/go-bloodlab-net/protocol/utilities"
+	"github.com/blutspende/go-bnet/protocol/utilities"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"

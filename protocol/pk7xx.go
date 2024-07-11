@@ -5,7 +5,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/blutspende/go-bloodlab-net/protocol/utilities"
+	"github.com/blutspende/go-bnet/protocol/utilities"
 )
 
 type pk7xxProtocol struct {

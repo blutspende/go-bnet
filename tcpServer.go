@@ -4,14 +4,14 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/blutspende/go-bloodlab-net/protocol/utilities"
+	"github.com/blutspende/go-bnet/protocol/utilities"
 	"io"
 	"math/rand"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/blutspende/go-bloodlab-net/protocol"
+	"github.com/blutspende/go-bnet/protocol"
 	"github.com/pires/go-proxyproto"
 	"github.com/rs/zerolog/log"
 )
