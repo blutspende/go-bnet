@@ -3,7 +3,7 @@
 A libarary to simplify communication with laboratory instruments.
 
 ###### Install
-`go get github.com/blutspende/go-bloodlab-net`
+`go get github.com/blutspende/go-bnet`
 
 ###### Features
   - TCP/IP Server implementation
