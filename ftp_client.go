@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -120,10 +121,10 @@ func (ci *ftpConnectionAndSession) Receive() ([]byte, error) {
 	}
 
 	var file *ftp.Entry
-
+outer:
 	for {
 		var files []*ftp.Entry
-		files, err := ci.ftpConn.List(ci.inputFilePattern)
+		files, err := ci.ftpConn.List("")
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				// When the error was a read/timout, then
@@ -137,9 +138,15 @@ func (ci *ftpConnectionAndSession) Receive() ([]byte, error) {
 				return nil, ErrListFilesFailed
 			}
 		}
-		if len(files) > 0 {
-			file = files[0]
-			break
+		for _, ifile := range files {
+			matched, err := filepath.Match(ci.inputFilePattern, ifile.Name)
+			if err != nil {
+				return nil, fmt.Errorf("Failed to match file with '%s' - %v", ci.inputFilePattern, err)
+			}
+			if matched {
+				file = ifile
+				break outer
+			}
 		}
 		time.Sleep(ci.PollInterval)
 	}
@@ -148,13 +155,14 @@ func (ci *ftpConnectionAndSession) Receive() ([]byte, error) {
 	if err != nil {
 		return nil, ErrDownloadFileFailed
 	}
-	defer fileReader.Close()
 
 	content, err := io.ReadAll(fileReader)
 	if err != nil {
 		log.Println("Failed to read ", err)
+		fileReader.Close()
 		return nil, ErrDownloadFileFailed
 	}
+	fileReader.Close()
 
 	switch ci.processStrategy {
 	case PROCESS_STRATEGY_DONOTHING:
@@ -165,10 +173,23 @@ func (ci *ftpConnectionAndSession) Receive() ([]byte, error) {
 			return []byte{}, ErrDeleteFile
 		}
 	case PROCESS_STRATEGY_MOVE2SAVE:
-		err = ci.ftpConn.Rename(file.Name, filepath.Join("save", file.Name))
+		lst, err := ci.ftpConn.NameList("")
+		if !slices.Contains[[]string, string](lst, "save") {
+			err = ci.ftpConn.MakeDir("save")
+		}
+		//if err != nil {
+		//	log.Println("Failed to rename file ", err)
+		//	return []byte{}, fmt.Errorf("failed to create folder - %v", err)
+		//}
+
+		err = ci.ftpConn.Stor(filepath.Join("save/", file.Name), bytes.NewReader(content))
 		if err != nil {
-			log.Println("Failed to rename file ", err)
-			return []byte{}, ErrDownloadFileFailed
+			return []byte{}, fmt.Errorf("failed to move file %s - %v", file.Name, err)
+		}
+
+		err = ci.ftpConn.Delete(file.Name)
+		if err != nil {
+			return []byte{}, fmt.Errorf("failed to rename file %s - %v", file.Name, err)
 		}
 	}
 

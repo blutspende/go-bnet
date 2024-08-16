@@ -4,22 +4,21 @@ import (
 	"testing"
 	"time"
 
-	ftpserver "github.com/fclairamb/ftpserverlib"
-	gkwrap "github.com/fclairamb/go-log/gokit"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/fclairamb/ftpserver/config"
-	"github.com/fclairamb/ftpserver/config/confpar"
-	"github.com/fclairamb/ftpserver/server"
+	filedriver "github.com/goftp/file-driver"
+	"github.com/goftp/server"
 )
 
 type testHandler struct {
+	receiveEvent chan bool
 	dataReceived []byte
 	t            *testing.T
 }
 
 func (th *testHandler) DataReceived(session Session, data []byte, receiveTimestamp time.Time) error {
 	th.dataReceived = data
+	th.receiveEvent <- true // inform everyone we received data
 	return nil
 }
 func (th *testHandler) Connected(session Session) error {
@@ -30,52 +29,104 @@ func (th *testHandler) Error(session Session, typeOfError ErrorType, err error) 
 	th.t.Fail()
 }
 
-func TestVanillaConnect(t *testing.T) {
+/*
+	Receiving Data sourced from an ftp server
 
-	var ftpServer *ftpserver.FtpServer
-	var driver *server.Server
+Every new file that is dropped in the in folder is treated like a transmission as if was through a socket
+Based on the strategy the file is ignored, deleted or moved after processing
 
-	logger := gkwrap.New()
+Test succeeds when the file arrives and the sourcefile is treated
+*/
+func TestReceiveFilesFromFtp(t *testing.T) {
 
-	conf := &config.Config{
-		Content: &confpar.Content{
-			ListenAddress: ":21",
-			PublicHost:    "127.0.0.1",
-			Accesses: []*confpar.Access{{
-				User: "test",
-				Pass: "test",
-				Fs:   "os",
-				Params: map[string]string{
-					"basePath": "tmp",
-				},
-			},
-			},
-			PassiveTransferPortRange: &confpar.PortRange{
-				Start: 30000,
-				End:   35000,
-			},
+	opts := &server.ServerOpts{
+		Factory: &filedriver.FileDriverFactory{
+			RootPath: "testfilesftp",
+			Perm:     server.NewSimplePerm("user", "group"),
 		},
+		Port:     21,
+		Hostname: "127.0.0.1",
+		Auth:     &server.SimpleAuth{Name: "test", Password: "test"},
 	}
 
-	driver, errNewServer := server.NewServer(conf, logger.With("component", "driver"))
-	assert.Nil(t, errNewServer)
-
+	// Run FTP Server...
 	go func() {
-		ftpServer = ftpserver.NewFtpServer(driver)
-		err := ftpServer.ListenAndServe()
+		server := server.NewServer(opts)
+		err := server.ListenAndServe()
 		assert.Nil(t, err)
+		t.Fail()
 	}()
 
-	// Here is the actual test...
+	// Use bnet to connect
 	bnetFtpClient := CreateNewFTPClient("127.0.0.1", 21, "test", "test",
-		"/in", "*.dat", "out", ".out", DefaultFTPFilnameGenerator, PROCESS_STRATEGY_DONOTHING, "\n")
+		"TestReceiveFilesFromFtp", "*.dat", "out", ".out", DefaultFTPFilnameGenerator, PROCESS_STRATEGY_DONOTHING, "\n")
 
 	th := &testHandler{
-		t: t,
+		t:            t,
+		receiveEvent: make(chan bool),
 	}
-	outcome := bnetFtpClient.Run(th)
-	assert.Nil(t, outcome)
+	go func() {
+		err := bnetFtpClient.Run(th)
+		assert.Equal(t, ErrExited, err)
+	}()
 
-	err := driver.WaitGracefully(time.Second * 5)
-	assert.Nil(t, err)
+	select {
+	case <-th.receiveEvent:
+		// this is the expectation: the file contents are delivered same as through a socket
+		assert.Equal(t, "Some orderdata", string(th.dataReceived))
+	case <-time.After(5 * time.Second):
+		t.Log("Timed out while waiting on receiving data (see test description)")
+		t.Fail()
+	}
+}
+
+func TestReceiveFilesFromFtpStrategyMove2Save(t *testing.T) {
+
+	opts := &server.ServerOpts{
+		Factory: &filedriver.FileDriverFactory{
+			RootPath: "testfilesftp",
+			Perm:     server.NewSimplePerm("user", "group"),
+		},
+		Port:     21,
+		Hostname: "127.0.0.1",
+		Auth:     &server.SimpleAuth{Name: "test", Password: "test"},
+	}
+
+	// Run FTP Server...
+	var ftpserver *server.Server
+	go func() {
+		ftpserver = server.NewServer(opts)
+		err := ftpserver.ListenAndServe()
+		assert.Nil(t, err)
+		t.Fail()
+	}()
+
+	// Use bnet to connect
+	bnetFtpClient := CreateNewFTPClient("127.0.0.1", 21, "test", "test",
+		"/TestReceiveFilesFromFtpStrategySave", "*.dat",
+		"out", ".out",
+		DefaultFTPFilnameGenerator, PROCESS_STRATEGY_MOVE2SAVE, "\n")
+
+	th := &testHandler{
+		t:            t,
+		receiveEvent: make(chan bool),
+	}
+	go func() {
+		err := bnetFtpClient.Run(th)
+		assert.Equal(t, ErrExited, err)
+	}()
+
+	select {
+	case <-th.receiveEvent:
+		bnetFtpClient.Stop()
+		ftpserver.Shutdown()
+		// this is the expectation for this test
+		// ... the file contents are delivered same as if they came through a socket
+		assert.Equal(t, "Some orderdata", string(th.dataReceived))
+	case <-time.After(500 * time.Second):
+		bnetFtpClient.Stop()
+		ftpserver.Shutdown()
+		t.Log("Timed out while waiting on receiving data (see test description)")
+		t.Fail()
+	}
 }
