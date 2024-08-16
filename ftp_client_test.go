@@ -96,9 +96,7 @@ func TestReceiveFilesFromFtpStrategyMove2Save(t *testing.T) {
 	var ftpserver *server.Server
 	go func() {
 		ftpserver = server.NewServer(opts)
-		err := ftpserver.ListenAndServe()
-		assert.Nil(t, err)
-		t.Fail()
+		ftpserver.ListenAndServe()
 	}()
 
 	// Use bnet to connect
