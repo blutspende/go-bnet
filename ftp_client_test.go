@@ -1,6 +1,7 @@
 package bloodlabnet
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -82,6 +83,15 @@ func TestReceiveFilesFromFtp(t *testing.T) {
 
 func TestReceiveFilesFromFtpStrategyMove2Save(t *testing.T) {
 
+	// prerequesite create testdir and testorders
+	TESTDIR := "TestReceiveFilesFromFtpStrategyMove2Save"
+	err := os.RemoveAll("testfilesftp/" + TESTDIR)
+	assert.Nil(t, err)
+	err = os.Mkdir("testfilesftp/"+TESTDIR, 0755)
+	assert.Nil(t, err)
+	TESTORDERCONTENT := "Content of an Arbitrary"
+	os.WriteFile("testfilesftp/"+TESTDIR+"/order.dat", []byte(TESTORDERCONTENT), 0644)
+
 	opts := &server.ServerOpts{
 		Factory: &filedriver.FileDriverFactory{
 			RootPath: "testfilesftp",
@@ -101,7 +111,7 @@ func TestReceiveFilesFromFtpStrategyMove2Save(t *testing.T) {
 
 	// Use bnet to connect
 	bnetFtpClient := CreateNewFTPClient("127.0.0.1", 21, "test", "test",
-		"/TestReceiveFilesFromFtpStrategySave", "*.dat",
+		TESTDIR, "*.dat",
 		"out", ".out",
 		DefaultFTPFilnameGenerator, PROCESS_STRATEGY_MOVE2SAVE, "\n")
 
@@ -118,10 +128,8 @@ func TestReceiveFilesFromFtpStrategyMove2Save(t *testing.T) {
 	case <-th.receiveEvent:
 		bnetFtpClient.Stop()
 		ftpserver.Shutdown()
-		// this is the expectation for this test
-		// ... the file contents are delivered same as if they came through a socket
-		assert.Equal(t, "Some orderdata", string(th.dataReceived))
-	case <-time.After(500 * time.Second):
+		assert.Equal(t, TESTORDERCONTENT, string(th.dataReceived))
+	case <-time.After(5 * time.Second):
 		bnetFtpClient.Stop()
 		ftpserver.Shutdown()
 		t.Log("Timed out while waiting on receiving data (see test description)")
