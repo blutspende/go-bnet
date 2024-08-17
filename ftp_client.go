@@ -91,11 +91,18 @@ func CreateNewFTPClient(hostname string, hostport int,
 
 func (ci *ftpConnectionAndSession) Send(data [][]byte) (int, error) {
 
+	if ci.ftpConn == nil {
+		err := ci.connectToServer()
+		if err != nil {
+			return 0, err
+		}
+	}
+
 	lineBreakBytes := []byte(ci.lineBreaks)
 	dataWithLinebreaks := make([]byte, 0)
 	for _, datarow := range data {
 		dataWithLinebreaks = append(dataWithLinebreaks, datarow...)
-		dataWithLinebreaks = append(dataWithLinebreaks, lineBreakBytes...)
+		dataWithLinebreaks = append(dataWithLinebreaks, lineBreakBytes...) //TODO: Let a flag toggle wether we need the last lb
 	}
 
 	generatedFilename, err := ci.filenameGeneratorFunction(dataWithLinebreaks, ci.outputFileExtension)
@@ -110,7 +117,7 @@ func (ci *ftpConnectionAndSession) Send(data [][]byte) (int, error) {
 		return 0, ErrSendFileFailed
 	}
 
-	return 0, nil
+	return len(dataWithLinebreaks), nil
 }
 
 func (ci *ftpConnectionAndSession) Receive() ([]byte, error) {
