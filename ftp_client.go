@@ -60,6 +60,7 @@ type ftpConnectionAndSession struct {
 	stopRequested             bool
 }
 
+// 10-180 Seconds is good for a pollInterval depending on the server
 func CreateNewFTPClient(hostname string, hostport int,
 	username string, password string,
 	inputFilePath, inputFilePattern,
@@ -68,6 +69,7 @@ func CreateNewFTPClient(hostname string, hostport int,
 	filenameGeneratorFunction FTPFilenameGeneratorFunction,
 	processStrategy ProcessStrategy,
 	lineBreak string,
+	pollInterval time.Duration,
 ) *ftpConnectionAndSession {
 
 	return &ftpConnectionAndSession{
@@ -81,7 +83,7 @@ func CreateNewFTPClient(hostname string, hostport int,
 		outputFilePath:            outputFilePath,
 		outputFileExtension:       outputFileExtension,
 		filenameGeneratorFunction: filenameGeneratorFunction,
-		PollInterval:              10 * time.Second,
+		PollInterval:              pollInterval,
 		ftpConn:                   nil,
 		lineBreaks:                lineBreak,
 		mainLoopActive:            false,
@@ -107,7 +109,7 @@ func (ci *ftpConnectionAndSession) Send(data [][]byte) (int, error) {
 
 	generatedFilename, err := ci.filenameGeneratorFunction(dataWithLinebreaks, ci.outputFileExtension)
 	if err != nil {
-		return 0, fmt.Errorf("generator funciton failed - %v", err)
+		return 0, fmt.Errorf("generator function failed - %v", err)
 	}
 
 	buffer := bytes.NewReader(dataWithLinebreaks)
@@ -134,12 +136,13 @@ outer:
 		files, err := ci.ftpConn.List("")
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				// When the error was a read/timout, then
-				// just reconnect
-				// TODO: Limt amout of reconnection
-				time.Sleep(1 * time.Second)
+				time.Sleep(time.Second)
 				log.Println("Lost connection, trying to reconnect to server...")
-				ci.connectToServer()
+				err = ci.connectToServer()
+				if err != nil {
+					log.Printf("Failed to reconnect (delay 60s now)- %v", err)
+					time.Sleep(60 * time.Second)
+				}
 				continue
 			} else {
 				return nil, ErrListFilesFailed
@@ -148,7 +151,8 @@ outer:
 		for _, ifile := range files {
 			matched, err := filepath.Match(ci.inputFilePattern, ifile.Name)
 			if err != nil {
-				return nil, fmt.Errorf("Failed to match file with '%s' - %v", ci.inputFilePattern, err)
+				log.Printf("failed to match file with '%s' skipping - %v", ci.inputFilePattern, err)
+				continue
 			}
 			if matched {
 				file = ifile

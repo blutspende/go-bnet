@@ -28,10 +28,10 @@ func (th *testHandler) Connected(session Session) error {
 }
 func (th *testHandler) Disconnected(session Session) {}
 func (th *testHandler) Error(session Session, typeOfError ErrorType, err error) {
+	th.t.Log(err)
 	th.t.Fail()
 }
 
-// File contents to be read as if they were socket transmissions
 func TestReceiveFilesFromFtpStrategyDoNothing(t *testing.T) {
 
 	// prerequesite create testdir and a testorder
@@ -62,7 +62,9 @@ func TestReceiveFilesFromFtpStrategyDoNothing(t *testing.T) {
 
 	// Use bnet to connect
 	bnetFtpClient := CreateNewFTPClient("127.0.0.1", 21, "test", "test",
-		TESTDIR, "*.dat", "out", ".out", DefaultFTPFilnameGenerator, PROCESS_STRATEGY_DONOTHING, "\n")
+		TESTDIR, "*.dat", "out", ".out",
+		DefaultFTPFilnameGenerator,
+		PROCESS_STRATEGY_DONOTHING, "\n", 10*time.Second)
 
 	th := &testHandler{
 		t:            t,
@@ -118,7 +120,8 @@ func TestReceiveFilesFromFtpStrategyMove2Save(t *testing.T) {
 	bnetFtpClient := CreateNewFTPClient("127.0.0.1", 21, "test", "test",
 		TESTDIR, "*.dat",
 		"out", ".out",
-		DefaultFTPFilnameGenerator, PROCESS_STRATEGY_MOVE2SAVE, "\n")
+		DefaultFTPFilnameGenerator, PROCESS_STRATEGY_MOVE2SAVE, "\n",
+		10*time.Second)
 
 	th := &testHandler{
 		t:            t,
@@ -183,7 +186,8 @@ func TestReceiveFilesFromFtpStrategyDelete(t *testing.T) {
 	bnetFtpClient := CreateNewFTPClient("127.0.0.1", 21, "test", "test",
 		TESTDIR, "*.dat",
 		"out", ".out",
-		DefaultFTPFilnameGenerator, PROCESS_STRATEGY_DELETE, "\n")
+		DefaultFTPFilnameGenerator, PROCESS_STRATEGY_DELETE, "\n",
+		10*time.Second)
 
 	th := &testHandler{
 		t:            t,
@@ -245,13 +249,21 @@ func TestSubmitFile(t *testing.T) {
 		TESTDIR, "*.dat",
 		TESTDIR, ".out",
 		func([]byte, string) (string, error) { return "testfile.dat", nil },
-		PROCESS_STRATEGY_DELETE, "\n")
+		PROCESS_STRATEGY_DELETE, "\r\n",
+		10*time.Second)
 
-	nBbytes, err := bnetFtpClient.Send([][]byte{[]byte("Eine Testdatei"), []byte("In zwei Zeilen")})
-	assert.Equal(t, 30, nBbytes)
+	TESTLINE1 := "A filecontent which will be split"
+	TESTLINE2 := "in two lines. bnet adds the linebreaks as they should"
+	nBbytes, err := bnetFtpClient.Send([][]byte{[]byte(TESTLINE1), []byte(TESTLINE2)})
+	assert.Equal(t, 90, nBbytes)
 	assert.Nil(t, err)
 
 	filedata, err := os.ReadFile(".testfilesftp/" + TESTDIR + "/testfile.dat")
 	assert.Nil(t, err)
-	assert.Equal(t, "Eine Testdatei\nIn zwei Zeilen\n", string(filedata))
+	assert.Equal(t, TESTLINE1+"\r\n"+TESTLINE2+"\r\n", string(filedata))
+}
+
+func TestDealWithServerTimeout(t *testing.T) {
+	// TODO: Given the crappy ftp Server implementation in go
+	// there is no way to lower the settings for timeout
 }
