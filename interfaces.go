@@ -1,6 +1,7 @@
 package bloodlabnet
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -9,8 +10,8 @@ type ConnectionInstance interface {
 	Send(data [][]byte) (int, error)
 	//Receive data directly from instance. This will not work if the instance handles many connections like TCP-Servers
 	Receive() ([]byte, error)
-	// Run - Main-Loop
-	Run(handler Handler)
+	// Run - Main-Loop. Blocking.&
+	Run(handler Handler) error
 	// Stop the main-loop of the Run-handler
 	Stop()
 	// Retrieve a session by IP. Do not use this for a normal protocol conversion of a server... Can return nil
@@ -51,3 +52,5 @@ type Handler interface {
 	// status messages regarding the connection is available
 	Error(session Session, typeOfError ErrorType, err error)
 }
+
+var ErrExited = fmt.Errorf("server exited")

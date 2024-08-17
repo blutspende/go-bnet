@@ -4,12 +4,13 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/blutspende/go-bnet/protocol/utilities"
 	"io"
 	"math/rand"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/blutspende/go-bnet/protocol/utilities"
 
 	"github.com/blutspende/go-bnet/protocol"
 	"github.com/pires/go-proxyproto"
@@ -118,7 +119,7 @@ func (instance *tcpServerInstance) Receive() ([]byte, error) {
 	return nil, errors.New("TCP server can't receive messages. Hint: Use another method")
 }
 
-func (instance *tcpServerInstance) Run(handler Handler) {
+func (instance *tcpServerInstance) Run(handler Handler) error {
 	var err error
 	instance.listener, err = net.Listen("tcp", fmt.Sprintf(":%d", instance.listeningPort))
 	if err != nil {
@@ -204,6 +205,8 @@ func (instance *tcpServerInstance) Run(handler Handler) {
 
 	instance.handler = nil
 	instance.mainLoopActive.Done()
+
+	return ErrExited
 }
 
 func removeSessionFromList(connections []*tcpServerSession, which *tcpServerSession) []*tcpServerSession {

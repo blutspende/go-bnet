@@ -8,6 +8,7 @@ A libarary to simplify communication with laboratory instruments.
 ###### Features
   - TCP/IP Server implementation
   - TCP/IP Client implementation
+  - FTP Client implementation
   - Low-level protocols : 
       - RAW `protocol.Raw()` 
 	  - STX-ETX `protocol.STXETX()`  
@@ -174,3 +175,29 @@ tcpServer := bloodlabnet.CreateNewTCPServerInstance(config.TCPListenerPort,
   bloodlabnet.HAProxySendProxyV2, config.TCPServerMaxConnections)
 
 ````
+
+### FTP Client
+
+The FTP Client connects to an FTP Server and polls in intervals for new Data. New files are
+treated as Incoming transmissions, as if they were submitted through a socket. When initializing
+a strategy must be chosen to deal with already processed files : Move them to a save folder
+or delete them. 
+
+Data send is dropped as file onto the server. Their filenames are generated with a generator-function
+passed during initialization.
+
+If the client looses the connection to the server during a timeout, the connection is reestablished
+and normal operations continues.
+
+``` Example on how to use
+// initialize the FTP Client
+bnetFtpClient := CreateNewFTPClient("127.0.0.1", 21, "test", "test", TESTDIR, "*.dat",
+	"out", ".out",DefaultFTPFilnameGenerator, PROCESS_STRATEGY_MOVE2SAVE, "\n")
+
+// Start polling. Note that the RUN function exists on serious errors
+go func() {
+	err := bnetFtpClient.Run(th)
+	log.Error(err)
+	os.Exit(-1
+}()
+```

@@ -59,7 +59,7 @@ func (s *tcpClientConnectionAndSession) WaitReady() bool {
 // Run - Ensure the client stays connected and receives Data.
 // On disconnect from server the client will forever retry to connect.
 // Call Stop() will exit the loop
-func (s *tcpClientConnectionAndSession) Run(handler Handler) {
+func (s *tcpClientConnectionAndSession) Run(handler Handler) error {
 	s.handler = handler
 	s.isStopped = false
 
@@ -82,6 +82,8 @@ func (s *tcpClientConnectionAndSession) Run(handler Handler) {
 	}
 
 	s.handler = nil
+
+	return ErrExited
 }
 
 func (s *tcpClientConnectionAndSession) Stop() {
