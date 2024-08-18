@@ -20,7 +20,6 @@ var ErrListFilesFailed = fmt.Errorf("failed to access files for listing")
 var ErrDownloadFileFailed = fmt.Errorf("donwload files failed")
 var ErrSendFileFailed = fmt.Errorf("sending file failed")
 var ErrDeleteFile = fmt.Errorf("failed to delete file")
-var ErrNoSuchDir = fmt.Errorf("no such directory")
 
 type ProcessStrategy string
 
@@ -126,7 +125,7 @@ func (ci *ftpConnectionAndSession) Receive() ([]byte, error) {
 
 	err := ci.ftpConn.ChangeDir(ci.inputFilePath)
 	if err != nil {
-		return nil, ErrNoSuchDir
+		return nil, fmt.Errorf("directory not found: '%s' - %v", ci.inputFilePath, err)
 	}
 
 	var file *ftp.Entry
@@ -224,20 +223,12 @@ func (ci *ftpConnectionAndSession) Run(handler Handler) error {
 
 	for ci.mainLoopActive && !ci.stopRequested {
 		data, err := ci.Receive()
-		//TODO Reconnect on timeout
-
-		switch err {
-		case nil:
-			handler.DataReceived(ci, data, time.Now())
-		case ErrListFilesFailed:
+		if err != nil {
 			handler.Error(ci, ErrorReceive, err)
-		case ErrDownloadFileFailed:
-			handler.Error(ci, ErrorReceive, err)
-		case ErrSendFileFailed:
-			handler.Error(ci, ErrorReceive, err)
-		default:
-			handler.Error(ci, ErrorReceive, err)
+			return err
 		}
+
+		handler.DataReceived(ci, data, time.Now())
 
 		time.Sleep(ci.PollInterval * time.Second)
 	}
