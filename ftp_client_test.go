@@ -267,3 +267,132 @@ func TestDealWithServerTimeout(t *testing.T) {
 	// TODO: Given the crappy ftp Server implementation in go
 	// there is no way to lower the settings for timeout
 }
+
+func TestThatStoppingTheClient(t *testing.T) {
+
+	// prerequesite: create testdir and a testorder
+	os.Mkdir(".testfilesftp", 0755)
+	TESTDIR := t.Name()
+	err := os.RemoveAll(".testfilesftp/" + TESTDIR)
+	assert.Nil(t, err)
+	err = os.Mkdir(".testfilesftp/"+TESTDIR, 0755)
+	assert.Nil(t, err)
+
+	// Run FTP Server...
+	var ftpserver *server.Server
+	waitStartup := sync.Mutex{}
+	waitStartup.Lock()
+	go func() {
+		ftpserver = server.NewServer(&server.ServerOpts{
+			Factory: &filedriver.FileDriverFactory{
+				RootPath: ".testfilesftp",
+				Perm:     server.NewSimplePerm("user", "group"),
+			},
+			Port:     2121,
+			Hostname: "127.0.0.1",
+			Auth:     &server.SimpleAuth{Name: "test", Password: "test"},
+		})
+		waitStartup.Unlock()
+		ftpserver.ListenAndServe()
+	}()
+	waitStartup.Lock()
+
+	// Use bnet to connect
+	bnetFtpClient := CreateNewFTPClient("127.0.0.1", 2121, "test", "test",
+		TESTDIR, "*.dat",
+		TESTDIR, ".out",
+		func([]byte, string) (string, error) { return "testfile.dat", nil },
+		PROCESS_STRATEGY_DELETE, "\r\n",
+		10*time.Second)
+
+	th := &testHandler{
+		t:            t,
+		receiveEvent: make(chan bool),
+	}
+
+	waitTermination := sync.Mutex{}
+
+	waitStart := sync.Mutex{}
+	waitStart.Lock()
+	waitTermination.Lock()
+	go func() {
+		waitStart.Unlock()
+		err := bnetFtpClient.Run(th)
+		assert.Equal(t, ErrExited, err)
+		waitTermination.Unlock()
+	}()
+
+	waitStart.Lock()
+	time.Sleep(time.Second)
+
+	bnetFtpClient.Stop()
+
+	//TODO: should timeout
+	waitTermination.Lock()
+}
+
+/*
+func TestVanishingFTPServerDuringOperation(t *testing.T) {
+
+	// prerequesite: create testdir and a testorder
+	os.Mkdir(".testfilesftp", 0755)
+	TESTDIR := t.Name()
+	err := os.RemoveAll(".testfilesftp/" + TESTDIR)
+	assert.Nil(t, err)
+	err = os.Mkdir(".testfilesftp/"+TESTDIR, 0755)
+	assert.Nil(t, err)
+
+	// Run FTP Server...
+	var ftpserver *server.Server
+	waitStartup := sync.Mutex{}
+	waitStartup.Lock()
+	go func() {
+		ftpserver = server.NewServer(&server.ServerOpts{
+			Factory: &filedriver.FileDriverFactory{
+				RootPath: ".testfilesftp",
+				Perm:     server.NewSimplePerm("user", "group"),
+			},
+			Port:     2121,
+			Hostname: "127.0.0.1",
+			Auth:     &server.SimpleAuth{Name: "test", Password: "test"},
+		})
+		waitStartup.Unlock()
+		ftpserver.ListenAndServe()
+	}()
+	waitStartup.Lock()
+
+	// Use bnet to connect
+	bnetFtpClient := CreateNewFTPClient("127.0.0.1", 2121, "test", "test",
+		TESTDIR, "*.dat",
+		TESTDIR, ".out",
+		func([]byte, string) (string, error) { return "testfile.dat", nil },
+		PROCESS_STRATEGY_DELETE, "\r\n",
+		10*time.Second)
+
+	th := &testHandler{
+		t:            t,
+		receiveEvent: make(chan bool),
+	}
+
+	waitTermination := sync.Mutex{}
+
+	waitFtpClientStart := sync.Mutex{}
+	waitFtpClientStart.Lock()
+	waitTermination.Lock()
+	go func() {
+		waitFtpClientStart.Unlock()
+		err := bnetFtpClient.Run(th)
+		assert.Equal(t, ErrExited, err)
+		waitTermination.Unlock()
+	}()
+
+	waitFtpClientStart.Lock()
+	time.Sleep(time.Second)
+
+	ftpserver.Shutdown()
+
+	//What happens:
+
+	// TODO:s hould timeout
+	waitTermination.Lock()
+} */

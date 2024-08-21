@@ -217,8 +217,8 @@ func (ci *ftpConnectionAndSession) Run(handler Handler) error {
 	}
 
 	err = handler.Connected(ci)
-	if err != nil {
-		ci.stopRequested = true
+	if err != nil { /* a veto from handler instantly stops the loop (it might be for a good reason) */
+		return err
 	}
 
 	for ci.mainLoopActive && !ci.stopRequested {
@@ -228,7 +228,13 @@ func (ci *ftpConnectionAndSession) Run(handler Handler) error {
 			return err
 		}
 
-		handler.DataReceived(ci, data, time.Now())
+		err = handler.DataReceived(ci, data, time.Now())
+		if err != nil {
+			//TODO: what should happen on an error ? mbe restore the file ?
+			// At the time of design the use-case wasnt clear, thats why
+			// this is only logged
+			log.Println("failed to process a transmsission. It is not yet implemented what has to happen in this case. Currently the file had been treated accordingly to strategy and will not be reprocessed")
+		}
 
 		time.Sleep(ci.PollInterval * time.Second)
 	}
