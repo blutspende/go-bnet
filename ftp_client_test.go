@@ -44,21 +44,26 @@ func TestReceiveFilesFromFtpStrategyDoNothing(t *testing.T) {
 	TESTORDERCONTENT := "Content of an Arbitrary"
 	os.WriteFile(".testfilesftp/"+TESTDIR+"/order.dat", []byte(TESTORDERCONTENT), 0644)
 
+	ftpServer := server.NewServer(&server.ServerOpts{
+		Factory: &filedriver.FileDriverFactory{
+			RootPath: ".testfilesftp",
+			Perm:     server.NewSimplePerm("user", "group"),
+		},
+		Port:     21,
+		Hostname: "127.0.0.1",
+		Auth:     &server.SimpleAuth{Name: "test", Password: "test"},
+	})
+	defer ftpServer.Shutdown()
 	// Run FTP Server...
 	go func() {
-		server := server.NewServer(&server.ServerOpts{
-			Factory: &filedriver.FileDriverFactory{
-				RootPath: ".testfilesftp",
-				Perm:     server.NewSimplePerm("user", "group"),
-			},
-			Port:     21,
-			Hostname: "127.0.0.1",
-			Auth:     &server.SimpleAuth{Name: "test", Password: "test"},
-		})
-		err := server.ListenAndServe()
+		err := ftpServer.ListenAndServe()
+		if err == server.ErrServerClosed {
+			return
+		}
 		assert.Nil(t, err)
 		t.Fail()
 	}()
+	time.Sleep(3 * time.Second)
 
 	// Use bnet to connect
 	bnetFtpClient := CreateNewFTPClient("127.0.0.1", 21, "test", "test",
@@ -78,7 +83,7 @@ func TestReceiveFilesFromFtpStrategyDoNothing(t *testing.T) {
 	select {
 	case <-th.receiveEvent:
 		// this is the expectation: the file contents are delivered same as through a socket
-		assert.Equal(t, "Some orderdata", string(th.dataReceived))
+		assert.Equal(t, TESTORDERCONTENT, string(th.dataReceived))
 	case <-time.After(5 * time.Second):
 		t.Log("Timed out while waiting on receiving data (see test description)")
 		t.Fail()

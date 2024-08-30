@@ -282,5 +282,5 @@ func (ci *ftpConnectionAndSession) WaitTermination() error {
 }
 
 func (ci *ftpConnectionAndSession) RemoteAddress() (string, error) {
-	return fmt.Sprintf("%s:%d", ci.hostname, ci.hostport), nil
+	return fmt.Sprintf("%s", ci.hostname), nil
 }
