@@ -16,6 +16,7 @@
 package protocol
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net"
@@ -24,8 +25,8 @@ import (
 )
 
 type MLLPProtocolSettings struct {
-	startByte     byte
-	endByte       byte
+	startBytes    []byte
+	endBytes      []byte
 	lineBreakByte byte
 }
 
@@ -37,19 +38,19 @@ type mllp struct {
 
 func DefaultMLLPProtocolSettings() *MLLPProtocolSettings {
 	return &MLLPProtocolSettings{
-		startByte:     utilities.VT,
-		endByte:       utilities.FS,
+		startBytes:    []byte{utilities.VT},
+		endBytes:      []byte{utilities.FS},
 		lineBreakByte: utilities.CR,
 	}
 }
 
-func (set *MLLPProtocolSettings) SetStartByte(startByte byte) *MLLPProtocolSettings {
-	set.startByte = startByte
+func (set *MLLPProtocolSettings) SetStartBytes(startBytes []byte) *MLLPProtocolSettings {
+	set.startBytes = startBytes
 	return set
 }
 
-func (set *MLLPProtocolSettings) SetEndByte(endByte byte) *MLLPProtocolSettings {
-	set.endByte = endByte
+func (set *MLLPProtocolSettings) SetEndBytes(endBytes []byte) *MLLPProtocolSettings {
+	set.endBytes = endBytes
 	return set
 }
 
@@ -152,17 +153,20 @@ func (proto *mllp) ensureReceiveThreadRunning(conn net.Conn) {
 				return
 			}
 
-			for _, x := range tcpReceiveBuffer[:n] {
-				if x == proto.settings.startByte {
+			for i := 0; i < n; i++ {
+				if i < n-len(proto.settings.startBytes) && bytes.Equal(tcpReceiveBuffer[i:i+len(proto.settings.startBytes)], proto.settings.startBytes) {
 					receivedMsg = []byte{} // start of text obsoletes all prior
+					i = i + len(proto.settings.startBytes) - 1
 					continue
 				}
-				if x == proto.settings.endByte {
+
+				if bytes.Equal(tcpReceiveBuffer[i:n], proto.settings.endBytes) {
 					messageDATA := protocolMessage{Status: DATA, Data: receivedMsg}
+					i += len(proto.settings.endBytes)
 					proto.receiveQ <- messageDATA
 					continue
 				}
-				receivedMsg = append(receivedMsg, x)
+				receivedMsg = append(receivedMsg, tcpReceiveBuffer[i])
 			}
 		}
 	}()
@@ -175,12 +179,12 @@ func (proto *mllp) Interrupt() {
 func (proto *mllp) Send(conn net.Conn, data [][]byte) (int, error) {
 
 	msgBuff := make([]byte, 0)
-	msgBuff = append(msgBuff, proto.settings.startByte)
+	msgBuff = append(msgBuff, proto.settings.startBytes...)
 	for _, line := range data {
 		msgBuff = append(msgBuff, line...)
 		msgBuff = append(msgBuff, proto.settings.lineBreakByte)
 	}
-	msgBuff = append(msgBuff, proto.settings.endByte)
+	msgBuff = append(msgBuff, proto.settings.endBytes...)
 
 	return conn.Write(msgBuff)
 }
