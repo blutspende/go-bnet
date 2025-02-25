@@ -191,6 +191,7 @@ func (instance *tcpServerInstance) Run(handler Handler) error {
 				instance.sessionCount++
 				waitStartup.Unlock()
 				instance.tcpSession(session)
+				session.Close()
 				instance.sessionCount--
 				instance.sessions = removeSessionFromList(instance.sessions, session)
 			}()
