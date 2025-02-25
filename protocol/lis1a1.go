@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -569,14 +570,14 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 			}
 
 		}
-
-		_, err = conn.Write([]byte{utilities.EOT})
-		if err != nil {
-			return -1, err
-		}
-
-		if os.Getenv("BNETDEBUG") == "true" {
-			fmt.Printf("bnet.Send Transmission sucessfully completed\n")
+		if !strings.EqualFold(os.Getenv("LIS1A1_TURN_OFF_EOT"), "true") {
+			_, err = conn.Write([]byte{utilities.EOT})
+			if err != nil {
+				return -1, err
+			}
+			if os.Getenv("BNETDEBUG") == "true" {
+				fmt.Printf("bnet.Send Transmission sucessfully completed\n")
+			}
 		}
 
 		return bytesTransferred, nil
