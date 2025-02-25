@@ -238,7 +238,13 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 
 			proto.asyncSendActive.Wait()
 			proto.asyncReadActive.Add(1)
-			conn.SetDeadline(time.Now().Add(time.Second * 30))
+			receiveTimeout := 30
+
+			timeout, err := strconv.Atoi(os.Getenv("LIS1A1_RECEIVE_TIMEOUT_SECONDS"))
+			if err == nil {
+				receiveTimeout = timeout
+			}
+			conn.SetDeadline(time.Now().Add(time.Second * time.Duration(receiveTimeout)))
 			n, err := conn.Read(tcpReceiveBuffer)
 			proto.asyncReadActive.Done()
 			if os.Getenv("BNETDEBUG") == "true" {
