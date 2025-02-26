@@ -30,6 +30,7 @@ type tcpServerInstance struct {
 	mainLoopActive     *sync.WaitGroup
 	sessions           []*tcpServerSession
 	waitRunningChannel chan bool
+	sessionMutex       *sync.Mutex
 }
 
 // --------------------------------------------------------------------------------------------
@@ -96,6 +97,7 @@ func CreateNewTCPServerInstance(listeningPort int, protocolReceiveve protocol.Im
 		mainLoopActive:     &sync.WaitGroup{},
 		sessions:           make([]*tcpServerSession, 0),
 		waitRunningChannel: make(chan bool),
+		sessionMutex:       &sync.Mutex{},
 	}
 
 }
@@ -152,51 +154,7 @@ func (instance *tcpServerInstance) Run(handler Handler) error {
 			}
 			continue
 		}
-
-		remoteIPAddress, _, _ := net.SplitHostPort(connection.RemoteAddr().String())
-
-		if utilities.Contains(remoteIPAddress, instance.config.BlackListedIPAddresses) {
-			connection.Close()
-			log.Trace().Str("ip", remoteIPAddress).Msg("incoming connection from blacklisted ip address closed")
-			continue
-		}
-		bufferedConn := newBufferedConn(connection)
-
-		// Portscanners and other players disconnect rather quickly; The first Byte sent breaks this delay
-		if instance.config.SessionAfterFirstByte {
-			if err := bufferedConn.FirstByteOrError(instance.config.SessionInitiationTimeout); err != nil {
-				connection.Close()
-				log.Trace().Str("ip", remoteIPAddress).Err(err).Msg("tcp server session initiation timeout reached")
-				continue // no error, a connection is regarded as "never established"
-			}
-		}
-
-		if instance.sessionCount >= instance.maxConnections {
-			connection.Close()
-			if instance.handler != nil {
-				go instance.handler.Error(nil, ErrorMaxConnections, nil)
-			}
-			log.Warn().Str("remoteIP", remoteIPAddress).Msg("max connection reached, forcing disconnect")
-			continue
-		}
-
-		session, err := createTcpServerSession(bufferedConn, handler, instance.LowLevelProtocol.NewInstance(), instance.config, remoteIPAddress)
-		if err != nil {
-			instance.handler.Error(session, ErrorCreateSession, fmt.Errorf("error creating a new TCP session - %w", err))
-		} else {
-			waitStartup := &sync.Mutex{}
-			waitStartup.Lock()
-			go func() {
-				instance.sessions = append(instance.sessions, session)
-				instance.sessionCount++
-				waitStartup.Unlock()
-				instance.tcpSession(session)
-				session.Close()
-				instance.sessionCount--
-				instance.sessions = removeSessionFromList(instance.sessions, session)
-			}()
-			waitStartup.Lock() // wait for the startup to update the sessioncounter
-		}
+		go instance.openConnection(connection, handler)
 	}
 
 	for _, x := range instance.sessions {
@@ -208,6 +166,51 @@ func (instance *tcpServerInstance) Run(handler Handler) error {
 	instance.mainLoopActive.Done()
 
 	return ErrExited
+}
+
+func (instance *tcpServerInstance) openConnection(connection net.Conn, handler Handler) {
+	remoteIPAddress, _, _ := net.SplitHostPort(connection.RemoteAddr().String())
+
+	if utilities.Contains(remoteIPAddress, instance.config.BlackListedIPAddresses) {
+		connection.Close()
+		log.Trace().Str("ip", remoteIPAddress).Msg("incoming connection from blacklisted ip address closed")
+		return
+	}
+	bufferedConn := newBufferedConn(connection)
+
+	// Portscanners and other players disconnect rather quickly; The first Byte sent breaks this delay
+	if instance.config.SessionAfterFirstByte {
+		if err := bufferedConn.FirstByteOrError(instance.config.SessionInitiationTimeout); err != nil {
+			connection.Close()
+			log.Trace().Str("ip", remoteIPAddress).Err(err).Msg("tcp server session initiation timeout reached")
+			return // no error, a connection is regarded as "never established"
+		}
+	}
+
+	if instance.sessionCount >= instance.maxConnections {
+		connection.Close()
+		if instance.handler != nil {
+			go instance.handler.Error(nil, ErrorMaxConnections, nil)
+		}
+		log.Warn().Str("remoteIP", remoteIPAddress).Msg("max connection reached, forcing disconnect")
+		return
+	}
+
+	session, err := createTcpServerSession(bufferedConn, handler, instance.LowLevelProtocol.NewInstance(), instance.config, remoteIPAddress)
+	if err != nil {
+		instance.handler.Error(session, ErrorCreateSession, fmt.Errorf("error creating a new TCP session - %w", err))
+	} else {
+		instance.sessionMutex.Lock()
+		instance.sessions = append(instance.sessions, session)
+		instance.sessionCount++
+		instance.sessionMutex.Unlock()
+		instance.tcpSession(session)
+		session.Close()
+		instance.sessionMutex.Lock()
+		instance.sessionCount--
+		instance.sessions = removeSessionFromList(instance.sessions, session)
+		instance.sessionMutex.Unlock()
+	}
 }
 
 func removeSessionFromList(connections []*tcpServerSession, which *tcpServerSession) []*tcpServerSession {
