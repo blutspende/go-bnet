@@ -18,16 +18,19 @@ package protocol
 import (
 	"bytes"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"io"
 	"net"
+	"time"
 
 	"github.com/blutspende/go-bnet/protocol/utilities"
 )
 
 type MLLPProtocolSettings struct {
-	startBytes    []byte
-	endBytes      []byte
-	lineBreakByte byte
+	startBytes         []byte
+	endBytes           []byte
+	lineBreakByte      byte
+	readTimeoutSeconds int
 }
 
 type mllp struct {
@@ -38,9 +41,10 @@ type mllp struct {
 
 func DefaultMLLPProtocolSettings() *MLLPProtocolSettings {
 	return &MLLPProtocolSettings{
-		startBytes:    []byte{utilities.VT},
-		endBytes:      []byte{utilities.FS},
-		lineBreakByte: utilities.CR,
+		startBytes:         []byte{utilities.VT},
+		endBytes:           []byte{utilities.FS},
+		lineBreakByte:      utilities.CR,
+		readTimeoutSeconds: 60,
 	}
 }
 
@@ -51,6 +55,11 @@ func (set *MLLPProtocolSettings) SetStartBytes(startBytes []byte) *MLLPProtocolS
 
 func (set *MLLPProtocolSettings) SetEndBytes(endBytes []byte) *MLLPProtocolSettings {
 	set.endBytes = endBytes
+	return set
+}
+
+func (set *MLLPProtocolSettings) SetReadTimeoutSeconds(readTimeoutSeconds int) *MLLPProtocolSettings {
+	set.readTimeoutSeconds = readTimeoutSeconds
 	return set
 }
 
@@ -109,24 +118,29 @@ func (proto *mllp) ensureReceiveThreadRunning(conn net.Conn) {
 
 		tcpReceiveBuffer := make([]byte, 4096)
 		receivedMsg := make([]byte, 0)
-
+		remoteAddress := conn.RemoteAddr().String()
 		for {
-
+			if proto.settings.readTimeoutSeconds > 0 {
+				_ = conn.SetReadDeadline(time.Now().Add(time.Second * time.Duration(proto.settings.readTimeoutSeconds)))
+			}
 			n, err := conn.Read(tcpReceiveBuffer)
-
+			log.Debug().Str("remoteAddress", remoteAddress).Bytes("receivedBytes", tcpReceiveBuffer).Msg("mllp: bytes received")
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
+					log.Debug().Str("remoteAddress", remoteAddress).Err(err).Msg("mllp: timeout - continue")
 					continue // on timeout....
 				} else if opErr, ok := err.(*net.OpError); ok && opErr.Op == "read" {
-
+					log.Debug().Str("remoteAddress", remoteAddress).Err(err).Msg("mllp: operror - read")
 					if len(receivedMsg)+n > 0 { // Process the remainder of the cache
-
+						log.Debug().Str("remoteAddress", remoteAddress).Msg("mllp: operror - read - process remainder")
 						for _, x := range tcpReceiveBuffer[:n] {
 							if x == utilities.STX {
+								log.Debug().Str("remoteAddress", remoteAddress).Msg("mllp: operror - read - process remainder - stx found")
 								receivedMsg = []byte{} // start of text obsoletes all prior
 								continue
 							}
 							if x == utilities.ETX {
+								log.Debug().Str("remoteAddress", remoteAddress).Msg("mllp: operror - read - process remainder - etx found")
 								messageDATA := protocolMessage{Status: DATA, Data: receivedMsg}
 								proto.receiveQ <- messageDATA
 								continue
@@ -153,14 +167,17 @@ func (proto *mllp) ensureReceiveThreadRunning(conn net.Conn) {
 				return
 			}
 
+			log.Debug().Str("remoteAddress", remoteAddress).Msg("mllp: process received bytes")
 			for i := 0; i < n; i++ {
 				if i < n-len(proto.settings.startBytes) && bytes.Equal(tcpReceiveBuffer[i:i+len(proto.settings.startBytes)], proto.settings.startBytes) {
+					log.Debug().Str("remoteAddress", remoteAddress).Msg("mllp: startBytes found")
 					receivedMsg = []byte{} // start of text obsoletes all prior
 					i = i + len(proto.settings.startBytes) - 1
 					continue
 				}
 
 				if bytes.Equal(tcpReceiveBuffer[i:n], proto.settings.endBytes) {
+					log.Debug().Str("remoteAddress", remoteAddress).Msg("mllp: endBytes found")
 					messageDATA := protocolMessage{Status: DATA, Data: receivedMsg}
 					i += len(proto.settings.endBytes)
 					proto.receiveQ <- messageDATA
