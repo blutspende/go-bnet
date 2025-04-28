@@ -42,7 +42,7 @@ type mllp struct {
 func DefaultMLLPProtocolSettings() *MLLPProtocolSettings {
 	return &MLLPProtocolSettings{
 		startBytes:         []byte{utilities.VT},
-		endBytes:           []byte{utilities.FS},
+		endBytes:           []byte{utilities.FS, utilities.CR},
 		lineBreakByte:      utilities.CR,
 		readTimeoutSeconds: 60,
 	}
@@ -169,11 +169,21 @@ func (proto *mllp) ensureReceiveThreadRunning(conn net.Conn) {
 
 			log.Debug().Str("remoteAddress", remoteAddress).Msg("mllp: process received bytes")
 			for i := 0; i < n; i++ {
-				if i < n-len(proto.settings.startBytes) && bytes.Equal(tcpReceiveBuffer[i:i+len(proto.settings.startBytes)], proto.settings.startBytes) {
+				if i <= n-len(proto.settings.startBytes) && bytes.Equal(tcpReceiveBuffer[i:i+len(proto.settings.startBytes)], proto.settings.startBytes) {
 					log.Debug().Str("remoteAddress", remoteAddress).Msg("mllp: startBytes found")
 					receivedMsg = []byte{} // start of text obsoletes all prior
 					i = i + len(proto.settings.startBytes) - 1
 					continue
+				}
+
+				//log only for message start end frame bytes
+				if n <= 3 {
+					log.Debug().
+						Str("remoteAddress", remoteAddress).
+						Bytes("tcpBufferPart", tcpReceiveBuffer[i:n]).
+						Int("i", i).
+						Bytes("endBytes", proto.settings.endBytes).
+						Msg("mllp: compare bytes with endBytes")
 				}
 
 				if bytes.Equal(tcpReceiveBuffer[i:n], proto.settings.endBytes) {
