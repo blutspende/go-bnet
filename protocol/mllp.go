@@ -124,7 +124,7 @@ func (proto *mllp) ensureReceiveThreadRunning(conn net.Conn) {
 				_ = conn.SetReadDeadline(time.Now().Add(time.Second * time.Duration(proto.settings.readTimeoutSeconds)))
 			}
 			n, err := conn.Read(tcpReceiveBuffer)
-			log.Debug().Str("remoteAddress", remoteAddress).Bytes("receivedBytes", tcpReceiveBuffer[:n]).Msg("mllp: bytes received")
+			log.Trace().Str("remoteAddress", remoteAddress).Bytes("receivedBytes", tcpReceiveBuffer[:n]).Msg("mllp: bytes received")
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
 					log.Debug().Str("remoteAddress", remoteAddress).Err(err).Msg("mllp: timeout - continue")
@@ -167,23 +167,12 @@ func (proto *mllp) ensureReceiveThreadRunning(conn net.Conn) {
 				return
 			}
 
-			log.Debug().Str("remoteAddress", remoteAddress).Msg("mllp: process received bytes")
 			for i := 0; i < n; i++ {
 				if i <= n-len(proto.settings.startBytes) && bytes.Equal(tcpReceiveBuffer[i:i+len(proto.settings.startBytes)], proto.settings.startBytes) {
 					log.Debug().Str("remoteAddress", remoteAddress).Msg("mllp: startBytes found")
 					receivedMsg = []byte{} // start of text obsoletes all prior
 					i = i + len(proto.settings.startBytes) - 1
 					continue
-				}
-
-				//log only for message start end frame bytes
-				if n <= 3 {
-					log.Debug().
-						Str("remoteAddress", remoteAddress).
-						Bytes("tcpBufferPart", tcpReceiveBuffer[i:n]).
-						Int("i", i).
-						Bytes("endBytes", proto.settings.endBytes).
-						Msg("mllp: compare bytes with endBytes")
 				}
 
 				if bytes.Equal(tcpReceiveBuffer[i:n], proto.settings.endBytes) {
