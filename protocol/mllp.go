@@ -124,7 +124,7 @@ func (proto *mllp) ensureReceiveThreadRunning(conn net.Conn) {
 				_ = conn.SetReadDeadline(time.Now().Add(time.Second * time.Duration(proto.settings.readTimeoutSeconds)))
 			}
 			n, err := conn.Read(tcpReceiveBuffer)
-			log.Debug().Str("remoteAddress", remoteAddress).Bytes("receivedBytes", tcpReceiveBuffer).Msg("mllp: bytes received")
+			log.Debug().Str("remoteAddress", remoteAddress).Bytes("receivedBytes", tcpReceiveBuffer[:n]).Msg("mllp: bytes received")
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
 					log.Debug().Str("remoteAddress", remoteAddress).Err(err).Msg("mllp: timeout - continue")
