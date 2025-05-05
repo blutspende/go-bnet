@@ -616,3 +616,150 @@ func TestTCPServerDeclineConnection(t *testing.T) {
 
 	tcpServer.Stop()
 }
+
+func TestLis1A1ProtocolDisableChecksumProtocolSettings(t *testing.T) {
+	tcpServer := CreateNewTCPServerInstance(9011,
+		protocol.Lis1A1Protocol(protocol.DefaultLis1A1ProtocolSettings().DisableStrictChecksum()),
+		NoLoadBalancer,
+		100,
+		DefaultTCPServerSettings)
+	handler := &testSessionMock{
+		receiveQ:          make(chan []byte, 500),
+		signalReady:       make(chan bool, 100), // buffered so that we can ignore this signal without blocking process
+		occuredErrorTypes: make([]ErrorType, 0),
+	}
+	go tcpServer.Run(handler)
+	tcpServer.WaitReady()
+
+	clientConn, err := net.Dial("tcp", "127.0.0.1:9011")
+	assert.Nil(t, err)
+
+	// An inline Script for the expected communication-flow
+	communicationFlow := []struct {
+		Receive bool
+		Data    []byte
+	}{
+		{Data: []byte{utilities.ENQ}, Receive: false},
+		{Data: []byte{utilities.ACK}, Receive: true},
+		{Data: []byte{utilities.STX}, Receive: false},
+		{Data: []byte("1H|\\^&|||"), Receive: false},
+		{Data: []byte{utilities.CR}, Receive: false},
+		{Data: []byte{utilities.ETX}, Receive: false},
+		{Data: []byte{'0', '0'}, Receive: false},
+		{Data: []byte{utilities.CR, utilities.LF}, Receive: false},
+		{Data: []byte{utilities.ACK}, Receive: true},
+
+		{Data: []byte{utilities.STX}, Receive: false},
+		{Data: []byte("2P|1||777025164810"), Receive: false},
+		{Data: []byte{utilities.CR}, Receive: false},
+		{Data: []byte{utilities.ETX}, Receive: false},
+		{Data: []byte{'0', '0'}, Receive: false},
+		{Data: []byte{utilities.CR, utilities.LF}, Receive: false},
+		{Data: []byte{utilities.ACK}, Receive: true},
+
+		{Data: []byte{utilities.STX}, Receive: false},
+		{Data: []byte("3L|1|N"), Receive: false},
+		{Data: []byte{utilities.CR}, Receive: false},
+		{Data: []byte{utilities.ETX}, Receive: false},
+		{Data: []byte{'0', '0'}, Receive: false},
+		{Data: []byte{utilities.CR, utilities.LF}, Receive: false},
+		{Data: []byte{utilities.EOT}, Receive: false},
+	}
+
+	for _, rec := range communicationFlow {
+		if !rec.Receive {
+			clientConn.Write(rec.Data)
+		} else {
+			data := make([]byte, 500)
+			n, err := clientConn.Read(data)
+			assert.Nil(t, err)
+			if n == len(rec.Data) {
+				for i, s := range data {
+					if s != data[i] {
+						t.Error(fmt.Sprint("Invalid response. Expected:", rec.Data, "(", string(rec.Data), ") but got ", data, "(", string(data), ")"))
+					}
+				}
+			} else {
+				t.Error(fmt.Sprint("Invalid response. Expected:", rec.Data, "(", string(rec.Data), ") but got ", data, "(", string(data), ")"))
+			}
+		}
+	}
+
+	tcpServer.Stop()
+
+	assert.Equal(t, 0, len(handler.occuredErrorTypes))
+}
+
+func TestLis1A1ProtocolDisableChecksumEnvSettings(t *testing.T) {
+	tcpServer := CreateNewTCPServerInstance(9012,
+		protocol.Lis1A1Protocol(protocol.DefaultLis1A1ProtocolSettings()),
+		NoLoadBalancer,
+		100,
+		DefaultTCPServerSettings)
+	handler := &testSessionMock{
+		receiveQ:          make(chan []byte, 500),
+		signalReady:       make(chan bool, 100), // buffered so that we can ignore this signal without blocking process
+		occuredErrorTypes: make([]ErrorType, 0),
+	}
+	os.Setenv("BNET_DISABLE_CHECKSUM", "true")
+	go tcpServer.Run(handler)
+	tcpServer.WaitReady()
+
+	clientConn, err := net.Dial("tcp", "127.0.0.1:9012")
+	assert.Nil(t, err)
+
+	// An inline Script for the expected communication-flow
+	communicationFlow := []struct {
+		Receive bool
+		Data    []byte
+	}{
+		{Data: []byte{utilities.ENQ}, Receive: false},
+		{Data: []byte{utilities.ACK}, Receive: true},
+		{Data: []byte{utilities.STX}, Receive: false},
+		{Data: []byte("1H|\\^&|||"), Receive: false},
+		{Data: []byte{utilities.CR}, Receive: false},
+		{Data: []byte{utilities.ETX}, Receive: false},
+		{Data: []byte{'0', '0'}, Receive: false},
+		{Data: []byte{utilities.CR, utilities.LF}, Receive: false},
+		{Data: []byte{utilities.ACK}, Receive: true},
+
+		{Data: []byte{utilities.STX}, Receive: false},
+		{Data: []byte("2P|1||777025164810"), Receive: false},
+		{Data: []byte{utilities.CR}, Receive: false},
+		{Data: []byte{utilities.ETX}, Receive: false},
+		{Data: []byte{'0', '0'}, Receive: false},
+		{Data: []byte{utilities.CR, utilities.LF}, Receive: false},
+		{Data: []byte{utilities.ACK}, Receive: true},
+
+		{Data: []byte{utilities.STX}, Receive: false},
+		{Data: []byte("3L|1|N"), Receive: false},
+		{Data: []byte{utilities.CR}, Receive: false},
+		{Data: []byte{utilities.ETX}, Receive: false},
+		{Data: []byte{'0', '0'}, Receive: false},
+		{Data: []byte{utilities.CR, utilities.LF}, Receive: false},
+		{Data: []byte{utilities.EOT}, Receive: false},
+	}
+
+	for _, rec := range communicationFlow {
+		if !rec.Receive {
+			clientConn.Write(rec.Data)
+		} else {
+			data := make([]byte, 500)
+			n, err := clientConn.Read(data)
+			assert.Nil(t, err)
+			if n == len(rec.Data) {
+				for i, s := range data {
+					if s != data[i] {
+						t.Error(fmt.Sprint("Invalid response. Expected:", rec.Data, "(", string(rec.Data), ") but got ", data, "(", string(data), ")"))
+					}
+				}
+			} else {
+				t.Error(fmt.Sprint("Invalid response. Expected:", rec.Data, "(", string(rec.Data), ") but got ", data, "(", string(data), ")"))
+			}
+		}
+	}
+
+	tcpServer.Stop()
+
+	assert.Equal(t, 0, len(handler.occuredErrorTypes))
+}
