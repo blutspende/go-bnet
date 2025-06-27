@@ -240,7 +240,7 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 			proto.asyncReadActive.Add(1)
 			conn.SetDeadline(time.Now().Add(time.Second * 30))
 			n, err := conn.Read(tcpReceiveBuffer)
-			log.Trace().Msgf("conn.Read: [%s] [%02x]", string(tcpReceiveBuffer), tcpReceiveBuffer)
+			traceLogBytes("READ", tcpReceiveBuffer[:n]...)
 			proto.asyncReadActive.Done()
 			if os.Getenv("BNETDEBUG") == "true" {
 				fmt.Printf("bnet.lisa1.Receive received %s (%d bytes) (raw: % X)\n", string(tcpReceiveBuffer[:n]), n, tcpReceiveBuffer[:n])
@@ -303,8 +303,8 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 						protocolMsg.Data = []byte(err.Error())
 					}
 
-					log.Trace().Msgf("conn.Write: [%s] [%02x]", string([]byte{utilities.NAK}), []byte{utilities.NAK})
 					_, err = conn.Write([]byte{utilities.NAK})
+					traceLogBytes("WRITE", utilities.NAK)
 					if err != nil {
 						protocolMsg.Data = append(protocolMsg.Data, []byte(err.Error())...)
 					}
@@ -330,8 +330,8 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 								Data:   []byte(fmt.Sprintf("Invalid Checksum. want: %s given: %s ", string(currentChecksum), string(messageBuffer))),
 							}
 
-							log.Trace().Msgf("conn.Write: [%s] [%02x]", string([]byte{utilities.NAK}), []byte{utilities.NAK})
 							_, err = conn.Write([]byte{utilities.NAK})
+							traceLogBytes("WRITE", utilities.NAK)
 							if err != nil {
 								protocolMsg.Data = append(protocolMsg.Data, []byte(err.Error())...)
 							}
@@ -357,8 +357,8 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 					fsm.Init()
 				case JustAck:
 					conn.SetDeadline(time.Time{})
-					log.Trace().Msgf("conn.Write: [%s] [%02x]", string([]byte{utilities.ACK}), []byte{utilities.ACK})
 					bytes, err := conn.Write([]byte{utilities.ACK})
+					traceLogBytes("WRITE", utilities.ACK)
 					if bytes != 1 {
 						if os.Getenv("BNETDEBUG") == "true" {
 							fmt.Printf("bnet.lisa1.Recieve (error) faled to send 1 byte (ACK'just ack') - ignore\n")
@@ -378,8 +378,8 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 							Data:   []byte(fmt.Sprintf("invalid Frame number. currentFrameNumber: %s expectedFrameNumber: %s", string(ascii), strconv.Itoa(nextExpectedFrameNumber))),
 						}
 						conn.SetDeadline(time.Time{})
-						log.Trace().Msgf("conn.Write: [%s] [%02x]", string([]byte{utilities.NAK}), []byte{utilities.NAK})
 						_, err = conn.Write([]byte{utilities.NAK})
+						traceLogBytes("WRITE", utilities.NAK)
 						if err != nil {
 							protocolMsg.Data = append(protocolMsg.Data, []byte(err.Error())...)
 						}
@@ -405,8 +405,8 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 					}
 
 					conn.SetDeadline(time.Time{})
-					log.Trace().Msgf("conn.Write: [%s] [%02x]", string([]byte{utilities.NAK}), []byte{utilities.NAK})
 					_, err = conn.Write([]byte{utilities.NAK})
+					traceLogBytes("WRITE", utilities.NAK)
 					if err != nil {
 						protocolMsg.Data = append(protocolMsg.Data, []byte(err.Error())...)
 					}
@@ -439,32 +439,37 @@ func (proto *lis1A1) sendFrameAndReceiveAnswer(frame []byte, frameNumber int, co
 		frameEnd = append([]byte{utilities.CR}, frameEnd...)
 	}
 	checksum := computeChecksum([]byte(frameStr), frame, frameEnd) //  frameNumber is an empty [] of bytes because it's already set to
-	log.Trace().Msgf("conn.Write: [%s] [%02x]", string([]byte{utilities.STX}), []byte{utilities.STX})
 	_, err := conn.Write([]byte{utilities.STX})
+	traceLogBytes("WRITE", utilities.STX)
+
 	if err != nil {
 		return 0, err
 	}
 
 	str := append([]byte(frameStr), frame...)
-	log.Trace().Msgf("conn.Write: [%s] [%02x]", string(str), str)
 	_, err = conn.Write(str)
+	traceLogBytes("WRITE str", str...)
+
 	if err != nil {
 		return 0, err
 	}
 
-	log.Trace().Msgf("conn.Write: [%s] [%02x]", string(frameEnd), frameEnd)
 	_, err = conn.Write(frameEnd)
+	traceLogBytes("WRITE frameEnd", frameEnd...)
+
 	if err != nil {
 		return 0, err
 	}
-	log.Trace().Msgf("conn.Write: [%s] [%02x]", string(checksum), checksum)
 	_, err = conn.Write(checksum)
+	traceLogBytes("WRITE checksum", checksum...)
+
 	if err != nil {
 		return 0, err
 	}
 
-	log.Trace().Msgf("conn.Write: [%s] [%02x]", string(proto.settings.lineEnding), proto.settings.lineEnding)
 	_, err = conn.Write(proto.settings.lineEnding)
+	traceLogBytes("WRITE lineEnding", proto.settings.lineEnding...)
+
 	if err != nil {
 		return 0, err
 	}
@@ -491,8 +496,9 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 		return -1, fmt.Errorf("the receiver does not accept any data")
 	}
 
-	log.Trace().Msgf("conn.Write: [%s] [%02x]", string([]byte{utilities.ENQ}), []byte{utilities.ENQ})
 	_, err := conn.Write([]byte{utilities.ENQ}) // 8.2.4
+	traceLogBytes("WRITE", utilities.ENQ)
+
 	if err != nil {
 		return -1, err
 	}
@@ -505,7 +511,7 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 
 		recievingMsg := make([]byte, 1)
 		n, err := conn.Read(recievingMsg)
-		log.Trace().Msgf("conn.Read: [%s] [%02x]", string(recievingMsg), recievingMsg)
+		traceLogBytes("READ", recievingMsg[:n]...)
 		if os.Getenv("BNETDEBUG") == "true" {
 			fmt.Printf("bnet.Send Received %s (%d bytes) (raw: % X)\n", string(recievingMsg), n, recievingMsg)
 		}
@@ -545,7 +551,7 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 		log.Debug().Msg("bnet.Send - Start transferring data")
 		for _, frame := range data {
 			receivedMsg, err := proto.sendFrameAndReceiveAnswer(frame, frameNumber, conn)
-			log.Debug().Msgf("send frame %d: frame [%s] [%02x ], resp [%s] [%02x ], err [%s]", frameNumber, string(frame), frame, string(receivedMsg), receivedMsg, err.Error())
+			//#log.Debug().Msgf("send frame %d: frame [%s] [%02x ], resp [%s] [%02x ], err [%s]", frameNumber, string(frame), frame, string(receivedMsg), receivedMsg, err.Error())
 			if err != nil {
 				return 0, err
 			}
@@ -555,7 +561,7 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 				for i := 0; i < 6; i++ {
 					time.Sleep(time.Second)
 					receivedMsg, err = proto.sendFrameAndReceiveAnswer(frame, frameNumber, conn)
-					log.Debug().Msgf("send frame %d retry: frame [%s] [%02x ], resp [%s] [%02x ], err [%s]", frameNumber, string(frame), frame, string(receivedMsg), receivedMsg, err.Error())
+					//#log.Debug().Msgf("send frame %d retry: frame [%s] [%02x ], resp [%s] [%02x ], err [%s]", frameNumber, string(frame), frame, string(receivedMsg), receivedMsg, err.Error())
 					if err != nil {
 						return 0, err
 					}
@@ -590,8 +596,9 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 
 		}
 		if !strings.EqualFold(os.Getenv("LIS1A1_TURN_OFF_EOT"), "true") {
-			log.Trace().Msgf("conn.Write: [%s] [%02x]", string([]byte{utilities.EOT}), []byte{utilities.EOT})
 			_, err = conn.Write([]byte{utilities.EOT})
+			traceLogBytes("WRITE", utilities.EOT)
+
 			if err != nil {
 				return -1, err
 			}
@@ -616,7 +623,7 @@ func (proto *lis1A1) receiveSendAnswer(conn net.Conn) (byte, error) {
 
 	receivingMsg := make([]byte, 1)
 	n, err := conn.Read(receivingMsg)
-	log.Trace().Msgf("conn.Read: [%s] [%02x]", string(receivingMsg), receivingMsg)
+	traceLogBytes("READ", receivingMsg[:n]...)
 	if os.Getenv("BNETDEBUG") == "true" {
 		fmt.Printf("bnet.Send receiveSendAnswer: read %d bytes : %s (raw: % X)\n", n, receivingMsg[:n], receivingMsg[:n])
 	}
@@ -660,4 +667,46 @@ func computeChecksum(frameNumber, record, specialChars []byte) []byte {
 
 	sum = sum % 256
 	return []byte(fmt.Sprintf("%02X", sum))
+}
+
+func traceLogBytes(name string, bytes ...byte) {
+	str := strings.Builder{}
+	hex := strings.Builder{}
+	for _, b := range bytes {
+		hex.WriteString(fmt.Sprintf("0x%02X ", b))
+		trs := fmt.Sprintf("%c", b)
+		if b < 32 || b > 126 {
+			switch b {
+			case utilities.NUL:
+				trs = "/NUL/"
+			case utilities.STX:
+				trs = "/STX/"
+			case utilities.ETX:
+				trs = "/ETX/"
+			case utilities.EOT:
+				trs = "/EOT/"
+			case utilities.ENQ:
+				trs = "/ENQ/"
+			case utilities.ACK:
+				trs = "/ACK/"
+			case utilities.LF:
+				trs = "/LF/"
+			case utilities.VT:
+				trs = "/VT/"
+			case utilities.CR:
+				trs = "/CR/"
+			case utilities.NAK:
+				trs = "/NAK/"
+			case utilities.ETB:
+				trs = "/ETB/"
+			case utilities.FS:
+				trs = "/FS/"
+			default:
+				trs = "/??/"
+			}
+		}
+		str.WriteString(trs)
+	}
+	out := fmt.Sprintf("%s: \"%s\" [%s]", name, str.String(), hex.String())
+	log.Trace().Msg(out)
 }
