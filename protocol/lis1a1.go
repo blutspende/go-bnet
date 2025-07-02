@@ -708,5 +708,5 @@ func traceLogBytes(name string, bytes ...byte) {
 		str.WriteString(trs)
 	}
 	out := fmt.Sprintf("%s: \"%s\" [%s]", name, str.String(), hex.String())
-	log.Trace().Msg(out)
+	log.Debug().Msg(out)
 }
