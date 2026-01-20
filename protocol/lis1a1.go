@@ -234,11 +234,11 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 		// init state machine
 		fsm := utilities.CreateFSM(Rules)
 		for {
-			conn.SetReadDeadline(time.Time{}) // NO timeout ever
-
 			proto.asyncSendActive.Wait()
 			proto.asyncReadActive.Add(1)
-			conn.SetDeadline(time.Now().Add(time.Second * 30))
+			if err := conn.SetDeadline(time.Now().Add(time.Second * 30)); err != nil {
+				log.Warn().Err(err).Str("sourceIP", conn.RemoteAddr().String()).Msg("set deadline error")
+			}
 			n, err := conn.Read(tcpReceiveBuffer)
 			proto.asyncReadActive.Done()
 			if os.Getenv("BNETDEBUG") == "true" {
@@ -246,13 +246,8 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 			}
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
-					log.Warn().Err(err).Str("sourceIP", conn.RemoteAddr().String()).Msg("read timeout")
-					proto.receiveThreadIsRunning = false
-					proto.receiveQ <- protocolMessage{
-						Status: DISCONNECT,
-						Data:   []byte(err.Error()),
-					}
-					return
+					log.Trace().Err(err).Str("sourceIP", conn.RemoteAddr().String()).Msg("read timeout")
+					continue
 				} else if opErr, ok := err.(*net.OpError); ok && opErr.Op == "read" {
 					log.Warn().Err(err).Str("sourceIP", conn.RemoteAddr().String()).Msg("read error")
 					proto.receiveThreadIsRunning = false
