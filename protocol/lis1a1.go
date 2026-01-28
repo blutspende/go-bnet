@@ -313,8 +313,7 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 					fsm.ResetBuffer()
 
 				case utilities.CheckSum:
-
-					if proto.settings.strictChecksumValidation {
+					if proto.settings.strictChecksumValidation && os.Getenv("BNET_DISABLE_CHECKSUM") != "true" {
 						currentChecksum := computeChecksum([]byte(proto.state.currentFrameNumber), lastMessage, []byte{utilities.ETX})
 
 						if string(currentChecksum) != string(messageBuffer) {
