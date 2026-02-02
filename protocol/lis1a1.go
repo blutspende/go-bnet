@@ -266,11 +266,10 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 				} else if opErr, ok := err.(*net.OpError); ok && opErr.Op == "read" {
 					log.Warn().Err(err).Str("sourceIP", conn.RemoteAddr().String()).Msg("read error")
 					proto.receiveQ <- protocolMessage{
-						Status: DISCONNECT,
+						Status: ERROR,
 						Data:   []byte(err.Error()),
 					}
-					proto.receiveThreadIsRunning = false
-					return
+					continue
 				} else if err == io.EOF { // EOF = silent exit
 					proto.receiveQ <- protocolMessage{
 						Status: DISCONNECT,
