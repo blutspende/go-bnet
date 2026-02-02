@@ -26,6 +26,8 @@ type Lis1A1ProtocolSettings struct {
 	strictChecksumValidation       bool
 	appendCarriageReturnToFrameEnd bool
 	sendTimeoutDuration            time.Duration
+	readTimeoutDuration            time.Duration
+	disconnectOnTimeout            bool
 	strictFrameOrder               bool
 	lineEnding                     []byte
 }
@@ -68,6 +70,11 @@ func (s Lis1A1ProtocolSettings) DisableAppendCarriageReturnToFrameEnd() *Lis1A1P
 	s.appendCarriageReturnToFrameEnd = false
 	return &s
 }
+func (s Lis1A1ProtocolSettings) SetReadTimeOutDuration(timeout time.Duration) *Lis1A1ProtocolSettings {
+	s.readTimeoutDuration = timeout
+	return &s
+}
+
 func (s Lis1A1ProtocolSettings) SetSendTimeOutDuration(timeout time.Duration) *Lis1A1ProtocolSettings {
 	s.sendTimeoutDuration = timeout
 	return &s
@@ -75,6 +82,11 @@ func (s Lis1A1ProtocolSettings) SetSendTimeOutDuration(timeout time.Duration) *L
 
 func (s Lis1A1ProtocolSettings) SetLineEnding(lineEnding []byte) *Lis1A1ProtocolSettings {
 	s.lineEnding = lineEnding
+	return &s
+}
+
+func (s Lis1A1ProtocolSettings) DisconnectOnTimeout(disconnect bool) *Lis1A1ProtocolSettings {
+	s.disconnectOnTimeout = disconnect
 	return &s
 }
 
@@ -140,23 +152,24 @@ func DefaultLis1A1ProtocolSettings() *Lis1A1ProtocolSettings {
 	var settings Lis1A1ProtocolSettings
 	settings.expectFrameNumbers = true
 	settings.strictChecksumValidation = true
-	settings.sendTimeoutDuration = 30
+	settings.sendTimeoutDuration = 30 * time.Second
+	settings.readTimeoutDuration = 0
+	settings.disconnectOnTimeout = false
 	settings.strictFrameOrder = false
 	settings.lineEnding = []byte{utilities.CR, utilities.LF}
 	return &settings
 }
 
 func Lis1A1Protocol(settings ...*Lis1A1ProtocolSettings) Implementation {
-
-	var theSettings *Lis1A1ProtocolSettings
+	var protocolSettings *Lis1A1ProtocolSettings
 	if len(settings) >= 1 {
-		theSettings = settings[0]
+		protocolSettings = settings[0]
 	} else {
-		theSettings = DefaultLis1A1ProtocolSettings()
+		protocolSettings = DefaultLis1A1ProtocolSettings()
 	}
 
 	return &lis1A1{
-		settings:               theSettings,
+		settings:               protocolSettings,
 		receiveQ:               make(chan protocolMessage),
 		receiveThreadIsRunning: false,
 		asyncReadActive:        sync.WaitGroup{},
@@ -172,31 +185,21 @@ func (proto *lis1A1) NewInstance() Implementation {
 	}
 }
 
-var Timeout error = fmt.Errorf("Timeout")
-
 func (proto *lis1A1) Receive(conn net.Conn) ([]byte, error) {
 
 	proto.ensureReceiveThreadRunning(conn)
 
-	select {
-	case message := <-proto.receiveQ:
-		switch message.Status {
-		case DATA:
-			return message.Data, nil
-		case EOF:
-			return []byte{}, io.EOF
-		case DISCONNECT:
-			return []byte{}, io.EOF
-		case ERROR:
-			return []byte{}, fmt.Errorf("error while reading - abort receiving data: %s", string(message.Data))
-		default:
-			return []byte{}, fmt.Errorf("internal error: Invalid status of communication (%d) - abort", message.Status)
-		}
-	case <-time.After(60 * time.Second):
-		// return []byte{}, fmt.Errorf("internal error: Invalid status of communication (%d) - abort", message.Status)
-		return []byte{}, Timeout
+	message := <-proto.receiveQ
+	switch message.Status {
+	case DATA:
+		return message.Data, nil
+	case DISCONNECT:
+		return []byte{}, io.EOF
+	case ERROR:
+		return []byte{}, fmt.Errorf("error while reading - abort receiving data: %s", string(message.Data))
+	default:
+		return []byte{}, fmt.Errorf("internal error: Invalid status of communication (%d) - abort", message.Status)
 	}
-
 }
 
 func (proto *lis1A1) transferMessageToHandler(messageLog [][]byte) {
@@ -236,8 +239,12 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 		for {
 			proto.asyncSendActive.Wait()
 			proto.asyncReadActive.Add(1)
-			if err := conn.SetDeadline(time.Now().Add(time.Second * 30)); err != nil {
-				log.Warn().Err(err).Str("sourceIP", conn.RemoteAddr().String()).Msg("set deadline error")
+			if proto.settings.readTimeoutDuration > 0 {
+				if err := conn.SetDeadline(time.Now().Add(proto.settings.readTimeoutDuration)); err != nil {
+					log.Warn().Err(err).Str("sourceIP", conn.RemoteAddr().String()).Msg("set deadline error")
+				}
+			} else {
+				_ = conn.SetDeadline(time.Time{})
 			}
 			n, err := conn.Read(tcpReceiveBuffer)
 			proto.asyncReadActive.Done()
@@ -246,16 +253,23 @@ func (proto *lis1A1) ensureReceiveThreadRunning(conn net.Conn) {
 			}
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
-					log.Trace().Err(err).Str("sourceIP", conn.RemoteAddr().String()).Msg("read timeout")
+					if proto.settings.disconnectOnTimeout {
+						log.Warn().Err(err).Str("sourceIP", conn.RemoteAddr().String()).Msg("disconnecting due to read timeout")
+						proto.receiveQ <- protocolMessage{
+							Status: DISCONNECT,
+							Data:   []byte(err.Error()),
+						}
+						proto.receiveThreadIsRunning = false
+						return
+					}
 					continue
 				} else if opErr, ok := err.(*net.OpError); ok && opErr.Op == "read" {
 					log.Warn().Err(err).Str("sourceIP", conn.RemoteAddr().String()).Msg("read error")
-					proto.receiveThreadIsRunning = false
 					proto.receiveQ <- protocolMessage{
-						Status: DISCONNECT,
+						Status: ERROR,
 						Data:   []byte(err.Error()),
 					}
-					return
+					continue
 				} else if err == io.EOF { // EOF = silent exit
 					proto.receiveQ <- protocolMessage{
 						Status: DISCONNECT,
@@ -480,7 +494,7 @@ func (proto *lis1A1) send(conn net.Conn, data [][]byte, recursionDepth int) (int
 	}
 
 	for {
-		err = conn.SetDeadline(time.Now().Add(time.Second * proto.settings.sendTimeoutDuration))
+		err = conn.SetDeadline(time.Now().Add(proto.settings.sendTimeoutDuration))
 		if err != nil {
 			return -1, ReceiverDoesNotRespond
 		}
@@ -584,7 +598,7 @@ func incrementFrameNumberModulo8(frameNumber int) int {
 }
 
 func (proto *lis1A1) receiveSendAnswer(conn net.Conn) (byte, error) {
-	err := conn.SetDeadline(time.Now().Add(time.Second * proto.settings.sendTimeoutDuration))
+	err := conn.SetDeadline(time.Now().Add(proto.settings.sendTimeoutDuration))
 	if err != nil {
 		return 0, ReceiverDoesNotRespond
 	}

@@ -291,11 +291,6 @@ func (instance *tcpServerInstance) tcpSession(session *tcpServerSession) error {
 		data, err := session.lowLevelProtocol.Receive(session.conn)
 
 		if err != nil {
-			if err == protocol.Timeout {
-				log.Warn().Str("ip", session.remoteAddr).Msg("tcp server session timeout")
-				continue // Timeout = keep retrying
-			}
-
 			if err == io.EOF {
 				// EOF is not an error, its a disconnect in TCP-terms: clean exit
 				log.Debug().Str("ip", session.remoteAddr).Msg("tcp server session disconnect")
